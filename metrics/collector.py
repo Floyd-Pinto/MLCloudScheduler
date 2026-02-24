@@ -36,8 +36,11 @@ class MetricsCollector:
         self._records: list[StepRecord] = []
 
     # ------------------------------------------------------------------
+    # Each resource unit handles this many workload units at 100% utilization
+    CAPACITY_PER_UNIT: float = 10.0
+
     def record(self, time_step: int, workload: float, capacity: int):
-        cpu = min((workload / max(capacity, 1)) * 100.0, 100.0)
+        cpu = min((workload / max(capacity * self.CAPACITY_PER_UNIT, 1)) * 100.0, 100.0)
         overloaded = cpu > self.overload_threshold
         self._records.append(
             StepRecord(time_step, workload, capacity, cpu, overloaded)

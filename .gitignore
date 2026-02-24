@@ -22,7 +22,10 @@ env/
 data/*.csv
 models/*.pkl
 models/*.joblib
-outputs/
+
+# Plot outputs (generated at runtime) — keep .gitkeep
+outputs/*
+!outputs/.gitkeep
 
 # IDE
 .vscode/settings.json

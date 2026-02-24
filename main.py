@@ -55,10 +55,13 @@ def main():
     }
 
     reactive_sched   = ReactiveScheduler(scale_up_threshold=70.0,
-                                         scale_down_threshold=30.0)
+                                         scale_down_threshold=30.0,
+                                         cooldown_steps=5)
     predictive_sched = PredictiveScheduler(window_size=10, horizon=5,
-                                           scale_up_threshold=65.0,
-                                           scale_down_threshold=30.0)
+                                           scale_up_threshold=60.0,   # scales up earlier
+                                           scale_down_threshold=30.0,
+                                           cooldown_steps=3,           # reacts faster
+                                           retrain_every=10)           # trains frequently
 
     reactive_collector   = MetricsCollector(overload_threshold=OVERLOAD_THRESHOLD)
     predictive_collector = MetricsCollector(overload_threshold=OVERLOAD_THRESHOLD)
@@ -105,6 +108,9 @@ def main():
         )
 
     print("\n\nSimulation complete. Outputs saved to outputs/")
+
+    # Persist the trained ML model for later use / inspection
+    predictive_sched.save_model("models")
 
 
 if __name__ == "__main__":

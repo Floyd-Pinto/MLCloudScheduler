@@ -8,7 +8,9 @@ Uses a sliding-window feature vector fed into a scikit-learn regressor
 ahead, then scales resources *before* overload occurs.
 """
 
+import os
 import numpy as np
+import joblib
 from sklearn.ensemble import GradientBoostingRegressor
 from sklearn.preprocessing import MinMaxScaler
 
@@ -94,23 +96,42 @@ class PredictiveScheduler:
         if self._step % self.retrain_every == 0:
             self._train()
 
+    # Must match MetricsCollector.CAPACITY_PER_UNIT
+    CAPACITY_PER_UNIT: float = 10.0
+
     def decide(self) -> int:
         """
         Return the new capacity based on the *predicted* future load.
-        Falls back to current capacity if model is not yet trained.
+        Falls back to reactive (current-load) logic during warmup when
+        the model does not yet have enough history to make predictions.
         """
         if self._cooldown_counter > 0:
             self._cooldown_counter -= 1
             return self.capacity
 
         predicted = self._predict()
+
+        # --- Warmup fallback: act like a reactive scheduler until trained ---
         if predicted is None:
+            if len(self._history) == 0:
+                return self.capacity
+            current = self._history[-1]
+            current_cpu = (current / max(self.capacity * self.CAPACITY_PER_UNIT, 1)) * 100.0
+            if current_cpu > self.scale_up_threshold:
+                self.capacity = min(self.capacity + 1, self.max_capacity)
+                self._cooldown_counter = self.cooldown_steps
+            elif current_cpu < self.scale_down_threshold:
+                self.capacity = max(self.capacity - 1, self.min_capacity)
+                self._cooldown_counter = self.cooldown_steps
             return self.capacity
 
-        if predicted > self.scale_up_threshold:
+        # --- Predictive scaling: use forecast CPU% at current capacity ---
+        effective_cpu = (predicted / max(self.capacity * self.CAPACITY_PER_UNIT, 1)) * 100.0
+
+        if effective_cpu > self.scale_up_threshold:
             self.capacity = min(self.capacity + 1, self.max_capacity)
             self._cooldown_counter = self.cooldown_steps
-        elif predicted < self.scale_down_threshold:
+        elif effective_cpu < self.scale_down_threshold:
             self.capacity = max(self.capacity - 1, self.min_capacity)
             self._cooldown_counter = self.cooldown_steps
 
@@ -122,3 +143,26 @@ class PredictiveScheduler:
         self._history.clear()
         self._step = 0
         self._trained = False
+
+    # ------------------------------------------------------------------
+    def save_model(self, directory: str = "models"):
+        """Persist the trained model and scaler to disk."""
+        if not self._trained:
+            print("  [PredictiveScheduler] Model not yet trained — nothing saved.")
+            return
+        os.makedirs(directory, exist_ok=True)
+        joblib.dump(self._model,  os.path.join(directory, "gbr_model.pkl"))
+        joblib.dump(self._scaler, os.path.join(directory, "scaler.pkl"))
+        print(f"  [PredictiveScheduler] Model saved to {directory}/")
+
+    def load_model(self, directory: str = "models"):
+        """Load a previously saved model and scaler from disk."""
+        model_path  = os.path.join(directory, "gbr_model.pkl")
+        scaler_path = os.path.join(directory, "scaler.pkl")
+        if not (os.path.exists(model_path) and os.path.exists(scaler_path)):
+            print(f"  [PredictiveScheduler] No saved model found in {directory}/")
+            return
+        self._model   = joblib.load(model_path)
+        self._scaler  = joblib.load(scaler_path)
+        self._trained = True
+        print(f"  [PredictiveScheduler] Model loaded from {directory}/")

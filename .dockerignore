@@ -1,0 +1,10 @@
+.venv/
+.git/
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+outputs/*.png
+data/*.csv
+models/*.pkl
+models/*.joblib

@@ -1,0 +1,19 @@
+version: "3.9"
+
+services:
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: ml-cloud-scheduler:latest
+    container_name: ml-cloud-scheduler
+    volumes:
+      # Mount local directories so outputs are accessible on the host
+      - ./data:/app/data
+      - ./models:/app/models
+      - ./outputs:/app/outputs
+    environment:
+      - MPLBACKEND=Agg
+    # Re-run with a specific workload pattern:
+    #   docker compose run --rm scheduler python main.py
