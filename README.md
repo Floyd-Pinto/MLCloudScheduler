@@ -176,21 +176,4 @@ The system features four distinct forecasting engines configured dynamically via
 
 ---
 
-## What Was Reused from Earlier Code
 
-| Original File | Action | New Location |
-|---|---|---|
-| `workload_generator.py` | Reused, enhanced | `model/workload_generator.py` |
-| `schedulers/reactive_scheduler.py` | Reused | `model/reactive_scheduler.py` |
-| `schedulers/predictive_scheduler.py` | Reused + enhanced | `model/predictive_scheduler.py` |
-| `metrics/collector.py` | Reused + action tracking added | `model/metrics_collector.py` |
-| `models/gbr_model.pkl` + `scaler.pkl` | Kept | `model/saved_models/` |
-| `data/*.csv` | Kept | `model/data/` |
-
-## What Was Removed
-
-| File | Reason |
-|---|---|
-| `main.py` (root) | Replaced by Django API + `model/evaluate.py` |
-| `visualization/plotter.py` | Replaced by React Chart.js frontend |
-| Root-level `metrics/`, `schedulers/` | Reorganized into `model/` |
