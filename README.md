@@ -1,118 +1,196 @@
 # ML-Based Adaptive Cloud Resource Scheduling
 
-A simulated cloud resource scheduling system that uses machine learning to **proactively** scale resources before overload occurs, compared against a traditional reactive (threshold-based) scheduler.
+> **Final Year Major Project** — Full-stack web application demonstrating ML-based predictive cloud resource scheduling versus traditional reactive scheduling.
 
-## Project Structure
+---
+
+## Project Overview
+
+This system simulates cloud workload environments and compares two scheduling strategies:
+
+| Scheduler | Strategy | Description |
+|---|---|---|
+| **Reactive** | Threshold-based | Scales resources *after* CPU exceeds a threshold (standard autoscaler behaviour) |
+| **Predictive** | ML-based | Uses GBR, PyTorch LSTM, ARIMA, or a Combined ensemble to forecast load and scales *before* overload |
+
+The frontend dashboard visualizes workload patterns, CPU utilization, capacity decisions, overload events, cost, and comparative ML metrics — making the advantage of predictive scheduling clearly demonstrable.
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Rationale |
+|---|---|---|
+| Frontend | React + Vite | Fast dev server, component-based UI |
+| Backend | Django + Django REST Framework | Robust, batteries-included Python API framework |
+| Database | SQLite (dev) | Zero-config, PostgreSQL-compatible schema for easy upgrade |
+| ML Model | GBR, PyTorch LSTM, ARIMA, Combined Ensemble | Deep learning, statistical, and hybrid models compared side-by-side |
+| Charts | Chart.js + react-chartjs-2 | Lightweight, well-documented charting |
+| CSS | Vanilla CSS (dark theme) | No framework dependency, full control |
+
+---
+
+## Folder Structure
 
 ```
 ml-cloud-scheduler/
-├── main.py                       # Entry point — runs the full simulation & comparison
-├── workload_generator.py         # Synthetic workload patterns (gradual, spike, periodic, combined)
-├── schedulers/
-│   ├── reactive_scheduler.py     # Baseline: threshold-based reactive scaling
-│   └── predictive_scheduler.py   # Proposed: ML-based predictive scaling (GradientBoosting)
-├── metrics/
-│   └── collector.py              # Records CPU usage, overload events, cost estimates
-├── visualization/
-│   └── plotter.py                # Comparison charts (capacity, CPU%, summary bar)
-├── data/                         # Generated simulation CSVs (git-ignored)
-├── models/                       # Saved ML model artifacts — gbr_model.pkl, scaler.pkl
-├── outputs/                      # Generated PNG plots (git-ignored)
-├── Dockerfile                    # Multi-stage Docker build (python:3.12-slim)
-├── docker-compose.yml            # Compose file — mounts data/, models/, outputs/ to host
-├── Makefile                      # Convenience shortcuts (venv, install, run, docker-*)
-├── requirements.txt
-├── .gitignore
-└── .dockerignore
+├── frontend/          # React + Vite app
+│   ├── src/
+│   │   ├── pages/     # Dashboard, Simulation, Training, Comparison, Metrics, Logs
+│   │   ├── charts/    # Chart.js wrappers
+│   │   ├── components/# Sidebar, reusable UI
+│   │   ├── services/  # Axios API layer
+│   │   └── styles/    # Global CSS (dark theme)
+│   └── package.json
+│
+├── backend/           # Django project
+│   ├── config/        # Settings, URLs, WSGI
+│   ├── simulation/    # Workload generation API
+│   ├── scheduler/     # Reactive + predictive scheduler API
+│   ├── ml_model/      # Training trigger + inference API
+│   ├── metrics/       # Metrics retrieval API
+│   ├── evaluation/    # Comparison + evaluation API
+│   └── manage.py
+│
+├── model/             # ML code and artifacts
+│   ├── workload_generator.py
+│   ├── reactive_scheduler.py
+│   ├── predictive_scheduler.py
+│   ├── metrics_collector.py
+│   ├── inference.py
+│   ├── evaluate.py
+│   ├── train_all.py   # ← run this to (re)train all 4 models
+│   ├── lstm_model.py  # PyTorch LSTM
+│   ├── arima_model.py # Statsmodels ARIMA
+│   ├── combined_model.py # Inverse-RMSE weighted ensemble
+│   └── saved_models/
+│       ├── gbr_model.pkl
+│       └── scaler.pkl
+│
+└── docs/
+    ├── SETUP.md
+    ├── ARCHITECTURE.md
+    └── API.md
 ```
 
-## Scheduling Approaches
+---
 
-| Approach | Mechanism | Scaling Trigger | Scale-up threshold |
-|---|---|---|---|
-| **Reactive (Baseline)** | Static CPU thresholds | After overload detected | 70% CPU |
-| **Predictive (Proposed)** | GradientBoosting time-series forecast | Before overload occurs | 60% predicted CPU |
+## Quick Start
 
-The predictive scheduler uses a sliding window of the last 10 load observations to forecast load 5 steps ahead, retraining every 10 steps. During the initial warmup period (before enough history is collected) it falls back to reactive logic so there is no cold-start gap.
+### Prerequisites
+- Python 3.11+
+- Node.js 20+ (installed via nvm if needed)
 
-## Simulation Results
-
-Predictive scheduling reduces overload events across all workload patterns:
-
-| Pattern | Reactive overloads | Predictive overloads | Improvement |
-|---|---|---|---|
-| Gradual | 8 | **4** | −50% |
-| Spike | 31 | **24** | −23% |
-| Periodic | 39 | **20** | −49% |
-| Combined | 21 | **19** | −10% |
-
-Each capacity unit handles 10 workload units (CPU % = `workload / (capacity × 10) × 100`). Overload is declared when CPU > 80%.
-
-## Getting Started
-
-### Option A — Local virtual environment
+### 1. Clone & set up Python env
 
 ```bash
-# 1. Create and activate venv
-python3 -m venv .venv
-source .venv/bin/activate        # bash/zsh
-# source .venv/bin/activate.fish # fish shell
-
-# 2. Install dependencies
-pip install -r requirements.txt
-
-# 3. Run simulation
-python main.py
+git clone <repo-url>
+cd ml-cloud-scheduler
+python -m venv .venv
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
+pip install -r backend/requirements.txt
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+pip install numpy pandas scikit-learn joblib statsmodels matplotlib
 ```
 
-Or use the Makefile:
+### 2. Train the models (first time)
 
 ```bash
-make venv     # create .venv
-make install  # install deps
-make run      # run simulation
+python model/train_all.py
+# Output: trains and saves GBR, PyTorch LSTM, ARIMA, and Combined Hybrid models
 ```
 
-### Option B — Docker
+### 3. Start the backend
 
 ```bash
-# Build image
-make docker-build   # or: docker compose build
-
-# Run simulation (outputs written to ./data, ./models, ./outputs on the host)
-make docker-run     # or: docker compose run --rm scheduler
+cd backend
+python manage.py migrate    # already done — db.sqlite3 is committed
+python manage.py runserver
+# → http://localhost:8000
 ```
 
-Outputs and plots are saved to `data/`, `models/`, and `outputs/` after each run.
+### 4. Start the frontend
 
-## Makefile Targets
+```bash
+# In a new terminal
+export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh"
+cd frontend
+npm install    # if not already done
+npm run dev
+# → http://localhost:5173
+```
 
-| Target | Description |
+### 5. Seed data (optional demo shortcut)
+
+Go to the UI:
+1. **Simulation** → Generate a workload (pattern: combined, steps: 200)
+2. **Training** → Click "Start Training"
+3. **Comparison** → Run Comparison → See results
+
+---
+
+## API Reference
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/simulation/generate/` | Generate synthetic workload |
+| GET | `/api/simulation/runs/` | List workload runs |
+| GET | `/api/simulation/runs/{id}/` | Get run + datapoints |
+| POST | `/api/scheduler/reactive/` | Run reactive scheduler |
+| POST | `/api/scheduler/predictive/` | Run predictive scheduler |
+| POST | `/api/scheduler/compare/` | Run both + return side-by-side |
+| GET | `/api/scheduler/runs/` | List all scheduler runs |
+| GET | `/api/scheduler/runs/{id}/` | Get run + step actions |
+| POST | `/api/ml/train/` | Trigger model training or train "all" |
+| GET | `/api/ml/status/` | Readiness + metrics for all models |
+| POST | `/api/ml/predict/` | Inference on history window |
+| POST | `/api/ml/predict-all/` | Inference across all models simultaneously |
+| POST/GET | `/api/ml/compare-models/` | Evaluate all 4 models on identical workloads + retrieve charts |
+| GET | `/api/ml/history/` | Training run history |
+| GET | `/api/metrics/` | All scheduler run summaries |
+| GET | `/api/metrics/summary/` | Aggregate KPIs |
+| POST | `/api/evaluation/run/` | Full evaluation + save |
+| GET | `/api/evaluation/` | List evaluations |
+| GET | `/api/evaluation/comparison/` | Latest comparison result |
+
+---
+
+## Database Choice: SQLite
+
+SQLite was chosen for local development because:
+- Zero configuration — works out of the box
+- Django ORM ensures all queries are standard SQL, making PostgreSQL migration trivial (`DATABASE_URL` + `psycopg2`)
+- Sufficient for the volume of data generated (thousands of rows per run)
+
+To switch to PostgreSQL: change `DATABASES` in `backend/config/settings.py`.
+
+---
+
+## ML Model Architectures
+
+The system features four distinct forecasting engines configured dynamically via API:
+1. **GradientBoostingRegressor** - 200 tree ensemble, ~2-second training, fast scaling logic.
+2. **PyTorch LSTM** - 2-Layer Recurrent Neural Net with Adam optimization capturing long-term non-linearities.
+3. **ARIMA** - Statsmodels statistical baseline utilizing AIC-based order grid searching.
+4. **Combined Hybrid Ensemble** - Weights the LSTM and ARIMA engines dynamically scaled by their inverse-RMSE accuracy.
+
+---
+
+## What Was Reused from Earlier Code
+
+| Original File | Action | New Location |
+|---|---|---|
+| `workload_generator.py` | Reused, enhanced | `model/workload_generator.py` |
+| `schedulers/reactive_scheduler.py` | Reused | `model/reactive_scheduler.py` |
+| `schedulers/predictive_scheduler.py` | Reused + enhanced | `model/predictive_scheduler.py` |
+| `metrics/collector.py` | Reused + action tracking added | `model/metrics_collector.py` |
+| `models/gbr_model.pkl` + `scaler.pkl` | Kept | `model/saved_models/` |
+| `data/*.csv` | Kept | `model/data/` |
+
+## What Was Removed
+
+| File | Reason |
 |---|---|
-| `make venv` | Create `.venv` virtual environment |
-| `make install` | Install Python dependencies into `.venv` |
-| `make run` | Run full simulation locally |
-| `make docker-build` | Build the Docker image |
-| `make docker-run` | Run simulation inside Docker |
-| `make clean` | Remove generated CSVs, model files, and plots |
-
-## Technologies Used
-
-- **Machine Learning** — `GradientBoostingRegressor` (scikit-learn) for time-series load forecasting
-- **Simulation** — Synthetic workload generation (gradual, spike, periodic, combined patterns)
-- **Visualization** — Matplotlib / Seaborn comparison plots (capacity, CPU%, summary bar charts)
-- **Infrastructure** — Docker multi-stage build, Docker Compose with volume mounts
-- **Concepts** — OS CPU scheduling, cloud autoscaling, adaptive feedback control loops
-
-## Objectives
-
-- Predict CPU and workload demand using sliding-window ML forecasting
-- Proactively scale resources before overload to reduce SLA violations
-- Compare reactive vs. predictive schedulers on: overload rate, avg CPU%, avg capacity, total cost
-- Persist trained model artifacts (`models/gbr_model.pkl`, `models/scaler.pkl`) for reuse
-
-## References
-
-- IEEE Papers on Cloud Scheduling and Predictive Autoscaling
-- Gartner Reports on AIOps and Cloud Infrastructure Trends
-- ACM Literature on Distributed Systems and Resource Management
+| `main.py` (root) | Replaced by Django API + `model/evaluate.py` |
+| `visualization/plotter.py` | Replaced by React Chart.js frontend |
+| Root-level `metrics/`, `schedulers/` | Reorganized into `model/` |

@@ -1,28 +1,62 @@
-# Convenience shortcuts — works with the local venv OR inside Docker.
+.PHONY: help install train backend frontend dev clean
 
-VENV_PYTHON := .venv/bin/python
+VENV = source .venv/bin/activate &&
+NODE = export NVM_DIR="$$HOME/.nvm" && . "$$NVM_DIR/nvm.sh" &&
 
-.PHONY: venv install run docker-build docker-run clean help
+help:
+	@echo ""
+	@echo "  ML-Based Adaptive Cloud Resource Scheduling"
+	@echo "  ============================================"
+	@echo ""
+	@echo "  make install     Install all Python dependencies"
+	@echo "  make train       Train the GBR model"
+	@echo "  make migrate     Run Django migrations"
+	@echo "  make backend     Start Django backend (port 8000)"
+	@echo "  make frontend    Start React frontend (port 5173)"
+	@echo "  make dev         Start BOTH backend and frontend"
+	@echo "  make test-api    Quick smoke-test all API endpoints"
+	@echo "  make clean       Remove pycache and build artifacts"
+	@echo ""
 
-help:          ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+install:
+	python -m venv .venv
+	$(VENV) pip install --upgrade pip
+	$(VENV) pip install django djangorestframework django-cors-headers python-dotenv \
+	                    numpy pandas scikit-learn joblib statsmodels matplotlib seaborn
+	$(NODE) cd frontend && npm install
 
-venv:          ## Create virtual environment
-	python3 -m venv .venv
-	@echo "Activate with: source .venv/bin/activate  (bash/zsh) or  source .venv/bin/activate.fish"
+train:
+	$(VENV) python model/train_gbr.py
 
-install:       ## Install Python dependencies into the venv
-	$(VENV_PYTHON) -m pip install --upgrade pip
-	$(VENV_PYTHON) -m pip install -r requirements.txt
+migrate:
+	$(VENV) cd backend && python manage.py makemigrations && python manage.py migrate
 
-run:           ## Run full simulation (local venv)
-	$(VENV_PYTHON) main.py
+backend:
+	$(VENV) cd backend && python manage.py runserver 8000
 
-docker-build:  ## Build the Docker image
-	docker compose build
+frontend:
+	$(NODE) cd frontend && npm run dev
 
-docker-run:    ## Run simulation inside Docker (outputs written to host)
-	docker compose run --rm scheduler
+dev:
+	@echo "Starting backend on :8000 and frontend on :5173 ..."
+	$(VENV) cd backend && python manage.py runserver 8000 &
+	$(NODE) cd frontend && npm run dev
 
-clean:         ## Remove generated data, models, and plots
-	rm -f data/*.csv models/*.pkl models/*.joblib outputs/*.png
+test-api:
+	@echo "Testing all endpoints..."
+	@curl -sf -X POST http://localhost:8000/api/simulation/generate/ \
+	  -H "Content-Type: application/json" -d '{"pattern":"gradual","steps":50,"seed":1}' > /dev/null \
+	  && echo "✓ simulation/generate"
+	@curl -sf http://localhost:8000/api/simulation/runs/ > /dev/null && echo "✓ simulation/runs"
+	@curl -sf -X POST http://localhost:8000/api/scheduler/compare/ \
+	  -H "Content-Type: application/json" -d '{"pattern":"spike","steps":100,"seed":42}' > /dev/null \
+	  && echo "✓ scheduler/compare"
+	@curl -sf http://localhost:8000/api/ml/status/ > /dev/null && echo "✓ ml/status"
+	@curl -sf http://localhost:8000/api/metrics/summary/ > /dev/null && echo "✓ metrics/summary"
+	@echo "All API checks passed ✅"
+
+clean:
+	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+	find . -type f -name "*.pyc" -delete 2>/dev/null || true
+	rm -rf frontend/dist frontend/.vite 2>/dev/null || true
+	@echo "Cleaned."
