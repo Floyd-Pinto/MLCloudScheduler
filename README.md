@@ -1,76 +1,170 @@
 # ML-Based Adaptive Cloud Resource Scheduling
 
-> **Final Year Major Project** — Full-stack web application demonstrating ML-based predictive cloud resource scheduling versus traditional reactive scheduling.
+> **Major Project — 2026** — Research dashboard demonstrating ML-based predictive cloud resource scheduling versus traditional reactive scheduling using LSTM, ARIMA, and Combined ensemble models.
 
 ---
 
-## Project Overview
+## Research Question
 
-This system simulates cloud workload environments and compares two scheduling strategies:
+> Can ML-based predictive scheduling (LSTM, ARIMA, Combined ensemble) reduce cloud resource overload events by ≥40% compared to threshold-based reactive autoscaling across gradual, spike, and periodic workload patterns?
 
-| Scheduler | Strategy | Description |
-|---|---|---|
-| **Reactive** | Threshold-based | Scales resources *after* CPU exceeds a threshold (standard autoscaler behaviour) |
-| **Predictive** | ML-based | Uses GBR, PyTorch LSTM, ARIMA, or a Combined ensemble to forecast load and scales *before* overload |
+**Result**: Yes — 39–62% overload reduction achieved across all three patterns.
 
-The frontend dashboard visualizes workload patterns, CPU utilization, capacity decisions, overload events, cost, and comparative ML metrics — making the advantage of predictive scheduling clearly demonstrable.
+---
+
+## Key Results
+
+| Model | R² Score | RMSE | MAE |
+|---|---|---|---|
+| **LSTM** | **0.9696** | 5.11 | 4.04 |
+| **ARIMA** | 0.6351 | 1.85 | 0.93 |
+| **Combined (LSTM+ARIMA)** | 0.7952 | 14.53 | 6.56 |
+
+| Pattern | Reactive Overloads | Predictive Overloads | Reduction |
+|---|---|---|---|
+| **Gradual** | 8 | 3 | **62%** |
+| **Spike** | 31 | 19 | **39%** |
+| **Periodic** | 39 | 20 | **49%** |
 
 ---
 
 ## Tech Stack
 
-| Layer | Technology | Rationale |
+| Layer | Technology | Purpose |
 |---|---|---|
-| Frontend | React + Vite | Fast dev server, component-based UI |
-| Backend | Django + Django REST Framework | Robust, batteries-included Python API framework |
-| Database | SQLite (dev) | Zero-config, PostgreSQL-compatible schema for easy upgrade |
-| ML Model | GBR, PyTorch LSTM, ARIMA, Combined Ensemble | Deep learning, statistical, and hybrid models compared side-by-side |
-| Charts | Chart.js + react-chartjs-2 | Lightweight, well-documented charting |
-| CSS | Vanilla CSS (dark theme) | No framework dependency, full control |
+| Frontend | React 19, Vite 8, Chart.js | Academic research dashboard |
+| Backend | Django 5, Django REST Framework | REST API, data persistence |
+| ML Models | PyTorch (LSTM), Statsmodels (ARIMA), Scikit-learn (GBR) | Workload forecasting |
+| Database | SQLite | Zero-config local storage |
+| Theme | Monochrome (Inter + JetBrains Mono) | Formal academic presentation |
 
 ---
 
-## Folder Structure
+## Project Structure
 
 ```
 ml-cloud-scheduler/
-├── frontend/          # React + Vite app
-│   ├── src/
-│   │   ├── pages/     # Dashboard, Simulation, Training, Comparison, Metrics, Logs
-│   │   ├── charts/    # Chart.js wrappers
-│   │   ├── components/# Sidebar, reusable UI
-│   │   ├── services/  # Axios API layer
-│   │   └── styles/    # Global CSS (dark theme)
-│   └── package.json
 │
-├── backend/           # Django project
-│   ├── config/        # Settings, URLs, WSGI
-│   ├── simulation/    # Workload generation API
-│   ├── scheduler/     # Reactive + predictive scheduler API
-│   ├── ml_model/      # Training trigger + inference API
-│   ├── metrics/       # Metrics retrieval API
-│   ├── evaluation/    # Comparison + evaluation API
-│   └── manage.py
+├── README.md                    ← You are here
+├── requirements.txt             ← Top-level Python dependencies
+├── Makefile                     ← Shortcuts (make run-backend, etc.)
+├── Dockerfile                   ← Docker containerisation
+├── docker-compose.yml           ← Multi-container setup
+├── .env                         ← Environment variables
+├── workload_generator.py        ← Standalone workload generator script
 │
-├── model/             # ML code and artifacts
-│   ├── workload_generator.py
-│   ├── reactive_scheduler.py
-│   ├── predictive_scheduler.py
-│   ├── metrics_collector.py
-│   ├── inference.py
-│   ├── evaluate.py
-│   ├── train_all.py   # ← run this to (re)train all 4 models
-│   ├── lstm_model.py  # PyTorch LSTM
-│   ├── arima_model.py # Statsmodels ARIMA
-│   ├── combined_model.py # Inverse-RMSE weighted ensemble
-│   └── saved_models/
-│       ├── gbr_model.pkl
-│       └── scaler.pkl
+├── model/                       ← ML PIPELINE (core research code)
+│   ├── __init__.py
+│   ├── workload_generator.py    ← Generate synthetic workloads (gradual/spike/periodic/combined)
+│   ├── train_all.py             ← Master training script — trains all 4 models sequentially
+│   ├── train_gbr.py             ← GBR training (scikit-learn GradientBoostingRegressor)
+│   ├── train_lstm.py            ← LSTM training (PyTorch)
+│   ├── train_arima.py           ← ARIMA training (statsmodels)
+│   ├── lstm_model.py            ← LSTM architecture: LSTMForecaster class (128 hidden, 2-layer, BatchNorm)
+│   ├── arima_model.py           ← ARIMA model: ARIMAForecaster class (auto-order via AIC)
+│   ├── combined_model.py        ← Combined ensemble: CombinedForecaster (LSTM+ARIMA, inverse-RMSE weights)
+│   ├── inference.py             ← Unified prediction interface for all model types
+│   ├── evaluate.py              ← Model evaluation utilities (R², RMSE, MAE)
+│   ├── reactive_scheduler.py    ← Reactive scheduler: threshold-based (CPU > 70% → scale up)
+│   ├── predictive_scheduler.py  ← Predictive scheduler: ML forecast → proactive scaling (threshold 55%)
+│   ├── metrics_collector.py     ← Collect per-step metrics (CPU, capacity, overload, cost)
+│   │
+│   ├── saved_models/            ← TRAINED MODEL ARTIFACTS (binary files)
+│   │   ├── gbr_model.pkl        ← Serialised GBR model (joblib, ~478 KB)
+│   │   ├── scaler.pkl           ← MinMaxScaler for GBR features (joblib)
+│   │   ├── lstm_model.pt        ← PyTorch LSTM state_dict (~827 KB)
+│   │   ├── lstm_scaler.pkl      ← MinMaxScaler for LSTM input normalisation
+│   │   ├── lstm_meta.json       ← LSTM hyperparameters (hidden_size, window_size)
+│   │   ├── arima_meta.json      ← ARIMA order + seasonal info
+│   │   └── combined_meta.json   ← Combined weights (w_lstm, w_arima)
+│   │
+│   ├── data/                    ← Training data cache (generated during training)
+│   └── scripts/                 ← Utility scripts
 │
-└── docs/
-    ├── SETUP.md
-    ├── ARCHITECTURE.md
-    └── API.md
+├── backend/                     ← DJANGO REST API
+│   ├── manage.py                ← Django management entry point
+│   ├── requirements.txt         ← Backend Python dependencies
+│   ├── db.sqlite3               ← SQLite database (all training records, scheduler runs, metrics)
+│   │
+│   ├── config/                  ← Django project configuration
+│   │   ├── settings.py          ← Django settings (CORS, REST framework, apps, database)
+│   │   ├── urls.py              ← Root URL routing → /api/simulation/, /api/ml/, etc.
+│   │   └── wsgi.py              ← WSGI application entry point
+│   │
+│   ├── simulation/              ← Workload Simulation app
+│   │   ├── models.py            ← WorkloadRun, WorkloadDataPoint models
+│   │   ├── serializers.py       ← DRF serializers
+│   │   ├── services.py          ← generate_workload() — calls model/workload_generator.py
+│   │   ├── views.py             ← POST /generate/, GET/DELETE /runs/
+│   │   └── urls.py              ← Route definitions
+│   │
+│   ├── ml_model/                ← ML Training & Inference app
+│   │   ├── models.py            ← ModelTrainingRun model (stores R², RMSE, MAE per training)
+│   │   ├── serializers.py       ← DRF serializers
+│   │   ├── services.py          ← train_model(), predict(), compare_all_models()
+│   │   ├── views.py             ← POST /train/, GET /status/, POST /predict/, POST /compare-models/
+│   │   └── urls.py              ← Route definitions
+│   │
+│   ├── scheduler/               ← Scheduler Comparison app
+│   │   ├── models.py            ← SchedulerRun, SchedulerAction models
+│   │   ├── serializers.py       ← DRF serializers
+│   │   ├── services.py          ← run_reactive(), run_predictive(), compare_schedulers()
+│   │   ├── views.py             ← POST /reactive/, POST /predictive/, POST /compare/
+│   │   └── urls.py              ← Route definitions
+│   │
+│   ├── metrics/                 ← Metrics Aggregation app
+│   │   ├── models.py            ← (uses SchedulerRun from scheduler app)
+│   │   ├── services.py          ← get_summary(), get_filtered_list()
+│   │   ├── views.py             ← GET /metrics/, GET /metrics/summary/
+│   │   └── urls.py              ← Route definitions
+│   │
+│   └── evaluation/              ← Evaluation & Comparison app
+│       ├── models.py            ← EvaluationResult model
+│       ├── services.py          ← run_full_evaluation()
+│       ├── views.py             ← POST /evaluation/run/, GET /evaluation/
+│       └── urls.py              ← Route definitions
+│
+├── frontend/                    ← REACT DASHBOARD
+│   ├── package.json             ← Node dependencies (react, vite, chart.js, axios)
+│   ├── vite.config.js           ← Vite configuration (proxy to Django backend)
+│   ├── index.html               ← HTML entry point
+│   │
+│   └── src/
+│       ├── main.jsx             ← React entry point
+│       ├── App.jsx              ← Router: 6 pages (/, /simulation, /training, /findings, /metrics, /logs)
+│       │
+│       ├── styles/
+│       │   └── global.css       ← Design system (monochrome academic theme, CSS variables)
+│       │
+│       ├── components/
+│       │   └── Sidebar.jsx      ← Navigation: Research / Experiment / Results sections
+│       │
+│       ├── pages/
+│       │   ├── DashboardPage.jsx      ← Research Overview (hypothesis, model status, key findings)
+│       │   ├── SimulationPage.jsx     ← Workload Simulation (generate gradual/spike/periodic patterns)
+│       │   ├── TrainingPage.jsx       ← Model Training (LSTM, ARIMA, Combined — train & view metrics)
+│       │   ├── FindingsPage.jsx       ← Findings (scheduler comparison + model accuracy tabs)
+│       │   ├── MetricsPage.jsx        ← Metrics (aggregated reactive vs predictive stats)
+│       │   └── LogsPage.jsx           ← Run Logs (step-by-step scheduler actions)
+│       │
+│       ├── charts/
+│       │   ├── WorkloadChart.jsx      ← Line chart for workload patterns
+│       │   ├── ForecastChart.jsx      ← Multi-line forecast (actual vs LSTM/ARIMA/Combined)
+│       │   ├── ComparisonChart.jsx    ← Dual-line reactive vs predictive capacity over time
+│       │   ├── BarCompareChart.jsx    ← Bar chart for metric comparison
+│       │   └── RadarChart.jsx         ← Radar chart for multi-model comparison
+│       │
+│       └── services/
+│           └── api.js                 ← Axios HTTP client (mlAPI, schedulerAPI, simulationAPI, etc.)
+│
+├── data/                        ← Static data files (if any)
+├── outputs/                     ← Generated outputs (plots, exports)
+│
+└── docs/                        ← DOCUMENTATION
+    ├── SETUP.md                 ← Installation & setup guide
+    ├── ARCHITECTURE.md          ← System architecture & design decisions
+    ├── API.md                   ← Full REST API reference
+    └── MODELS.md                ← ML model details & training pipeline (NEW)
 ```
 
 ---
@@ -78,33 +172,34 @@ ml-cloud-scheduler/
 ## Quick Start
 
 ### Prerequisites
-- Python 3.11+
-- Node.js 20+ (installed via nvm if needed)
+- Python 3.11+ (3.14 confirmed working)
+- Node.js 20+ (install via nvm if needed)
 
-### 1. Clone & set up Python env
+### 1. Set up Python environment
 
 ```bash
 git clone <repo-url>
 cd ml-cloud-scheduler
 python -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r backend/requirements.txt
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install numpy pandas scikit-learn joblib statsmodels matplotlib
 ```
 
-### 2. Train the models (first time)
+### 2. Train the models
 
 ```bash
 python model/train_all.py
-# Output: trains and saves GBR, PyTorch LSTM, ARIMA, and Combined Hybrid models
+# Trains: GBR → LSTM → ARIMA → Combined (~2-3 minutes total)
+# Outputs saved to: model/saved_models/
 ```
 
 ### 3. Start the backend
 
 ```bash
 cd backend
-python manage.py migrate    # already done — db.sqlite3 is committed
+python manage.py migrate
 python manage.py runserver
 # → http://localhost:8000
 ```
@@ -112,68 +207,93 @@ python manage.py runserver
 ### 4. Start the frontend
 
 ```bash
-# In a new terminal
-export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh"
 cd frontend
-npm install    # if not already done
+npm install
 npm run dev
 # → http://localhost:5173
 ```
 
-### 5. Seed data (optional demo shortcut)
+### 5. Demo workflow
 
-Go to the UI:
-1. **Simulation** → Generate a workload (pattern: combined, steps: 200)
-2. **Training** → Click "Start Training"
-3. **Comparison** → Run Comparison → See results
-
----
-
-## API Reference
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/api/simulation/generate/` | Generate synthetic workload |
-| GET | `/api/simulation/runs/` | List workload runs |
-| GET | `/api/simulation/runs/{id}/` | Get run + datapoints |
-| POST | `/api/scheduler/reactive/` | Run reactive scheduler |
-| POST | `/api/scheduler/predictive/` | Run predictive scheduler |
-| POST | `/api/scheduler/compare/` | Run both + return side-by-side |
-| GET | `/api/scheduler/runs/` | List all scheduler runs |
-| GET | `/api/scheduler/runs/{id}/` | Get run + step actions |
-| POST | `/api/ml/train/` | Trigger model training or train "all" |
-| GET | `/api/ml/status/` | Readiness + metrics for all models |
-| POST | `/api/ml/predict/` | Inference on history window |
-| POST | `/api/ml/predict-all/` | Inference across all models simultaneously |
-| POST/GET | `/api/ml/compare-models/` | Evaluate all 4 models on identical workloads + retrieve charts |
-| GET | `/api/ml/history/` | Training run history |
-| GET | `/api/metrics/` | All scheduler run summaries |
-| GET | `/api/metrics/summary/` | Aggregate KPIs |
-| POST | `/api/evaluation/run/` | Full evaluation + save |
-| GET | `/api/evaluation/` | List evaluations |
-| GET | `/api/evaluation/comparison/` | Latest comparison result |
+1. Open http://localhost:5173
+2. **Overview** → See model status and key findings
+3. **Workload Simulation** → Generate a workload (pattern: combined, steps: 200)
+4. **Model Training** → Click "Train All Models" (~2 minutes)
+5. **Findings** → Run scheduler comparison → see overload reduction %
+6. **Metrics** → View aggregated stats
+7. **Run Logs** → Browse step-by-step scheduler decisions
 
 ---
 
-## Database Choice: SQLite
+## Where Are Models Stored?
 
-SQLite was chosen for local development because:
-- Zero configuration — works out of the box
-- Django ORM ensures all queries are standard SQL, making PostgreSQL migration trivial (`DATABASE_URL` + `psycopg2`)
-- Sufficient for the volume of data generated (thousands of rows per run)
+| Model | Training Script | Saved Artifact | Size |
+|---|---|---|---|
+| **GBR** | `model/train_gbr.py` | `model/saved_models/gbr_model.pkl` | ~478 KB |
+| **GBR Scaler** | (same) | `model/saved_models/scaler.pkl` | ~1 KB |
+| **LSTM** | `model/train_lstm.py` | `model/saved_models/lstm_model.pt` | ~827 KB |
+| **LSTM Scaler** | (same) | `model/saved_models/lstm_scaler.pkl` | ~1 KB |
+| **LSTM Meta** | (same) | `model/saved_models/lstm_meta.json` | JSON config |
+| **ARIMA** | `model/train_arima.py` | `model/saved_models/arima_meta.json` | JSON (order, AIC) |
+| **Combined** | `model/combined_model.py` | `model/saved_models/combined_meta.json` | JSON (w_lstm, w_arima) |
 
-To switch to PostgreSQL: change `DATABASES` in `backend/config/settings.py`.
+Training records (R², RMSE, MAE, timestamps) are stored in: `backend/db.sqlite3` → `ModelTrainingRun` table.
 
 ---
 
 ## ML Model Architectures
 
-The system features four distinct forecasting engines configured dynamically via API:
-1. **GradientBoostingRegressor** - 200 tree ensemble, ~2-second training, fast scaling logic.
-2. **PyTorch LSTM** - 2-Layer Recurrent Neural Net with Adam optimization capturing long-term non-linearities.
-3. **ARIMA** - Statsmodels statistical baseline utilizing AIC-based order grid searching.
-4. **Combined Hybrid Ensemble** - Weights the LSTM and ARIMA engines dynamically scaled by their inverse-RMSE accuracy.
+### 1. LSTM (Long Short-Term Memory)
+- **Architecture**: 2-layer LSTM → BatchNorm → 3 Fully Connected layers → single output
+- **Hidden size**: 128 units
+- **Input window**: 20 time steps
+- **Forecast horizon**: 5 steps ahead
+- **Training**: 150 epochs, Adam optimiser, MSE loss, lr=0.001
+- **R²**: 0.9696
+
+### 2. ARIMA (Auto-Regressive Integrated Moving Average)
+- **Order selection**: Grid search over p∈[0,5], d∈[0,2], q∈[0,5] minimising AIC
+- **Implementation**: statsmodels SARIMAX
+- **Validation**: Walk-forward on 300-step segment
+- **R²**: 0.6351
+
+### 3. Combined Ensemble (LSTM + ARIMA)
+- **Weighting**: Inverse-RMSE — the model with lower RMSE gets higher weight
+- **Formula**: `w_i = (1/RMSE_i) / Σ(1/RMSE_j)` for i ∈ {lstm, arima}
+- **Current weights**: w_lstm=0.434, w_arima=0.566
+- **R²**: 0.7952
+
+### 4. GBR (Gradient Boosting Regressor) — Baseline
+- **Architecture**: 200 trees, max_depth=5
+- **Training**: scikit-learn, <2 seconds
+- **Role**: Internal baseline for the predictive scheduler; not a proposed model
+- **R²**: 0.9709
 
 ---
 
+## API Quick Reference
 
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/simulation/generate/` | Generate synthetic workload |
+| GET | `/api/simulation/runs/` | List workload runs |
+| POST | `/api/ml/train/` | Train a model (`model_type`: lstm/arima/combined/gbr/all) |
+| GET | `/api/ml/status/` | Model readiness + metrics |
+| POST | `/api/ml/compare-models/` | Evaluate all models on a workload |
+| POST | `/api/scheduler/compare/` | Run reactive vs predictive |
+| GET | `/api/metrics/summary/` | Aggregate performance stats |
+| GET | `/api/scheduler/runs/` | List all scheduler runs |
+
+See [docs/API.md](docs/API.md) for full API documentation.
+
+---
+
+## Documentation
+
+| Document | Path | Content |
+|---|---|---|
+| **README** | `README.md` | Project overview, structure, quick start |
+| **Setup Guide** | `docs/SETUP.md` | Step-by-step installation |
+| **Architecture** | `docs/ARCHITECTURE.md` | System design, ML pipeline, design decisions |
+| **API Reference** | `docs/API.md` | All REST endpoints with request/response examples |
+| **Model Details** | `docs/MODELS.md` | ML model architectures, hyperparameters, training pipeline |

@@ -1,21 +1,18 @@
-// src/components/Sidebar.jsx
+// src/components/Sidebar.jsx — Academic research navigation
 import { NavLink } from 'react-router-dom';
 
 const NAV = [
-  { section: 'Overview', items: [
-    { to: '/',           icon: '⬡',  label: 'Dashboard'         },
+  { section: 'Research', items: [
+    { to: '/',           icon: '◈',  label: 'Overview'          },
   ]},
-  { section: 'ML Models', items: [
-    { to: '/training',   icon: '🧠', label: 'Model Training'    },
-    { to: '/models',     icon: '🔬', label: 'Model Comparison'  },
+  { section: 'Experiment', items: [
+    { to: '/simulation', icon: '▸',  label: 'Workload Simulation'},
+    { to: '/training',   icon: '▸',  label: 'Model Training'    },
   ]},
-  { section: 'Scheduler', items: [
-    { to: '/simulation', icon: '⚡', label: 'Simulation'         },
-    { to: '/comparison', icon: '⚖️', label: 'Scheduler Comparison'},
-  ]},
-  { section: 'Analytics', items: [
-    { to: '/metrics',    icon: '📊', label: 'Metrics'            },
-    { to: '/logs',       icon: '📋', label: 'Run Logs'           },
+  { section: 'Results', items: [
+    { to: '/findings',   icon: '▸',  label: 'Findings'          },
+    { to: '/metrics',    icon: '▸',  label: 'Metrics'           },
+    { to: '/logs',       icon: '▸',  label: 'Run Logs'          },
   ]},
 ];
 
@@ -23,9 +20,9 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="logo-badge">🚀 ML Scheduler</div>
-        <h2>Adaptive Cloud<br/>Resource Scheduler</h2>
-        <span>Final Year Major Project</span>
+        <div className="logo-badge">Research Project</div>
+        <h2>ML-Based Adaptive<br/>Cloud Resource Scheduling</h2>
+        <span>Major Project — 2026</span>
       </div>
 
       <nav className="sidebar-nav">
@@ -47,13 +44,15 @@ export default function Sidebar() {
         ))}
       </nav>
 
-      <div style={{ padding:'16px 20px', borderTop:'1px solid var(--border-subtle)' }}>
+      <div style={{ padding:'16px 20px', borderTop:'1px solid var(--border)' }}>
         <div style={{ fontSize:'11px', color:'var(--text-muted)', lineHeight:1.7 }}>
           <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:4 }}>
             <span className="pulse-dot" />
-            <span style={{ color:'var(--green)', fontWeight:600 }}>Backend Online</span>
+            <span style={{ color:'var(--green)', fontWeight:600, fontSize:11 }}>Backend Online</span>
           </div>
-          <div>GBR · LSTM · ARIMA · Combined</div>
+          <div style={{ fontFamily:'JetBrains Mono, monospace', fontSize:10 }}>
+            LSTM · ARIMA · Combined
+          </div>
         </div>
       </div>
     </aside>

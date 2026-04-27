@@ -35,7 +35,7 @@ export default function LogsPage() {
   return (
     <div>
       <div className="page-header">
-        <div className="page-title">📋 Run Logs</div>
+        <div className="page-title">Run Logs</div>
         <div className="page-subtitle">History of all scheduler runs and step-by-step actions.</div>
       </div>
 
@@ -56,7 +56,7 @@ export default function LogsPage() {
                 </div>
                 {runs.length===0 ? (
                   <div className="empty-state">
-                    <span className="empty-state-icon">📋</span>
+                    <span className="empty-state-icon">—</span>
                     <span>No runs yet.</span>
                   </div>
                 ) : runs.map(r => (
@@ -68,7 +68,7 @@ export default function LogsPage() {
                       cursor:'pointer',
                       marginBottom:4,
                       background: selected?.id===r.id ? 'var(--bg-card-hover)' : 'var(--bg-input)',
-                      border:`1px solid ${selected?.id===r.id ? 'var(--accent)' : 'var(--border-subtle)'}`,
+                      border:`1px solid ${selected?.id===r.id ? 'var(--border-strong)' : 'var(--border-subtle)'}`,
                       transition:'all 0.15s',
                     }}>
                     <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
@@ -81,9 +81,9 @@ export default function LogsPage() {
                       </span>
                     </div>
                     <div style={{fontSize:12, color:'var(--text-muted)', display:'flex', gap:12}}>
-                      <span>⚠ {r.overload_events} overloads</span>
-                      <span>💻 {r.avg_cpu?.toFixed(1)}% cpu</span>
-                      <span>💰 {r.total_cost?.toFixed(0)} cost</span>
+                      <span>{r.overload_events} overloads</span>
+                      <span>{r.avg_cpu?.toFixed(1)}% cpu</span>
+                      <span>{r.total_cost?.toFixed(0)} cost</span>
                     </div>
                   </div>
                 ))}
@@ -94,7 +94,7 @@ export default function LogsPage() {
                 <div className="section-title">Step-by-Step Actions</div>
                 {!detail ? (
                   <div className="empty-state">
-                    <span className="empty-state-icon">👆</span>
+                    <span className="empty-state-icon">—</span>
                     <span>Select a run to see actions</span>
                   </div>
                 ) : (
@@ -104,7 +104,7 @@ export default function LogsPage() {
                         {detail.scheduler_type}
                       </span>
                       <span className="badge badge-blue">{detail.pattern} · {detail.steps} steps</span>
-                      <span className="badge badge-yellow">⚠ {detail.overload_events} overloads</span>
+                      <span className="badge badge-blue">{detail.overload_events} overloads</span>
                     </div>
                     <div className="table-wrap">
                       <table>
@@ -121,7 +121,7 @@ export default function LogsPage() {
                               <td style={{color: ACTION_COLOR[a.action], fontWeight:600, fontSize:11}}>
                                 {a.action==='scale_up'?' ↑ UP':a.action==='scale_down'?' ↓ DOWN':' — hold'}
                               </td>
-                              <td>{a.overloaded ? <span style={{color:'var(--red)'}}>🔴</span> : ''}
+                              <td>{a.overloaded ? <span style={{color:'var(--red)'}}>●</span> : ''}
                               </td>
                             </tr>
                           ))}
@@ -148,7 +148,7 @@ export default function LogsPage() {
               </div>
               {evals.length === 0 ? (
                 <div className="empty-state">
-                  <span className="empty-state-icon">📊</span>
+                  <span className="empty-state-icon">—</span>
                   <span>No evaluations yet — go to Comparison and click "Save Evaluation".</span>
                 </div>
               ) : (

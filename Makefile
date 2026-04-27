@@ -5,11 +5,11 @@ NODE = export NVM_DIR="$$HOME/.nvm" && . "$$NVM_DIR/nvm.sh" &&
 
 help:
 	@echo ""
-	@echo "  ML-Based Adaptive Cloud Resource Scheduling"
-	@echo "  ============================================"
+	@echo "  ML-Based Adaptive Cloud Resource Scheduling (V3)"
+	@echo "  ================================================"
 	@echo ""
-	@echo "  make install     Install all Python dependencies"
-	@echo "  make train       Train the GBR model"
+	@echo "  make install     Install all Python + Node dependencies"
+	@echo "  make train       Train all 4 ML models (GBR, LSTM, ARIMA, Combined)"
 	@echo "  make migrate     Run Django migrations"
 	@echo "  make backend     Start Django backend (port 8000)"
 	@echo "  make frontend    Start React frontend (port 5173)"
@@ -23,10 +23,11 @@ install:
 	$(VENV) pip install --upgrade pip
 	$(VENV) pip install django djangorestframework django-cors-headers python-dotenv \
 	                    numpy pandas scikit-learn joblib statsmodels matplotlib seaborn
+	$(VENV) pip install torch --index-url https://download.pytorch.org/whl/cpu
 	$(NODE) cd frontend && npm install
 
 train:
-	$(VENV) python model/train_gbr.py
+	$(VENV) python model/train_all.py
 
 migrate:
 	$(VENV) cd backend && python manage.py makemigrations && python manage.py migrate
@@ -52,6 +53,11 @@ test-api:
 	  -H "Content-Type: application/json" -d '{"pattern":"spike","steps":100,"seed":42}' > /dev/null \
 	  && echo "✓ scheduler/compare"
 	@curl -sf http://localhost:8000/api/ml/status/ > /dev/null && echo "✓ ml/status"
+	@curl -sf http://localhost:8000/api/ml/history/ > /dev/null && echo "✓ ml/history"
+	@curl -sf -X POST http://localhost:8000/api/ml/predict-all/ \
+	  -H "Content-Type: application/json" -d '{"history":[10,20,30,40,50,60,70,80,90,100]}' > /dev/null \
+	  && echo "✓ ml/predict-all"
+	@curl -sf http://localhost:8000/api/ml/compare-models/ > /dev/null && echo "✓ ml/compare-models"
 	@curl -sf http://localhost:8000/api/metrics/summary/ > /dev/null && echo "✓ metrics/summary"
 	@echo "All API checks passed ✅"
 

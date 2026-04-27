@@ -1,14 +1,13 @@
-// src/App.jsx
+// src/App.jsx — Academic research dashboard
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import Sidebar              from './components/Sidebar';
-import DashboardPage        from './pages/DashboardPage';
-import SimulationPage       from './pages/SimulationPage';
-import TrainingPage         from './pages/TrainingPage';
-import ModelComparisonPage  from './pages/ModelComparisonPage';
-import ComparisonPage       from './pages/ComparisonPage';
-import MetricsPage          from './pages/MetricsPage';
-import LogsPage             from './pages/LogsPage';
+import Sidebar         from './components/Sidebar';
+import DashboardPage   from './pages/DashboardPage';
+import SimulationPage  from './pages/SimulationPage';
+import TrainingPage    from './pages/TrainingPage';
+import FindingsPage    from './pages/FindingsPage';
+import MetricsPage     from './pages/MetricsPage';
+import LogsPage        from './pages/LogsPage';
 import './styles/global.css';
 
 export default function App() {
@@ -18,13 +17,12 @@ export default function App() {
         <Sidebar />
         <main className="main-content">
           <Routes>
-            <Route path="/"              element={<DashboardPage        />} />
-            <Route path="/simulation"    element={<SimulationPage       />} />
-            <Route path="/training"      element={<TrainingPage         />} />
-            <Route path="/models"        element={<ModelComparisonPage  />} />
-            <Route path="/comparison"    element={<ComparisonPage       />} />
-            <Route path="/metrics"       element={<MetricsPage          />} />
-            <Route path="/logs"          element={<LogsPage             />} />
+            <Route path="/"           element={<DashboardPage  />} />
+            <Route path="/simulation" element={<SimulationPage />} />
+            <Route path="/training"   element={<TrainingPage   />} />
+            <Route path="/findings"   element={<FindingsPage   />} />
+            <Route path="/metrics"    element={<MetricsPage    />} />
+            <Route path="/logs"       element={<LogsPage       />} />
           </Routes>
         </main>
       </div>
@@ -32,10 +30,11 @@ export default function App() {
         position="top-right"
         toastOptions={{
           style: {
-            background: 'var(--bg-card)',
-            color: 'var(--text-primary)',
-            border: '1px solid var(--border)',
+            background: '#111',
+            color: '#e5e5e5',
+            border: '1px solid #2a2a2a',
             fontSize: '13px',
+            fontFamily: 'Inter, sans-serif',
           },
         }}
       />

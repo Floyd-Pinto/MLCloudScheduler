@@ -71,8 +71,8 @@ def run_reactive(pattern: str, steps: int, seed: int,
 def run_predictive(pattern: str, steps: int, seed: int,
                    workload_run: WorkloadRun | None = None) -> SchedulerRun:
     workload   = generate(pattern=pattern, steps=steps, seed=seed)
-    scheduler  = PredictiveScheduler(window_size=10, horizon=5, scale_up_threshold=65.0,
-                                     scale_down_threshold=30.0, cooldown_steps=3, retrain_every=10)
+    scheduler  = PredictiveScheduler(window_size=10, horizon=5, scale_up_threshold=55.0,
+                                     scale_down_threshold=30.0, cooldown_steps=2, retrain_every=10)
     collector  = MetricsCollector(overload_threshold=80.0, scheduler_type="predictive")
     return _run_and_save(workload, scheduler, collector, "predictive", pattern, seed, workload_run)
 

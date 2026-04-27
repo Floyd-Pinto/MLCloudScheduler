@@ -44,7 +44,7 @@ export default function MetricsPage() {
   return (
     <div>
       <div className="page-header">
-        <div className="page-title">📊 Metrics</div>
+        <div className="page-title">Metrics</div>
         <div className="page-subtitle">
           Aggregated performance metrics across all scheduler runs.
         </div>
@@ -59,15 +59,15 @@ export default function MetricsPage() {
             <div className="card" style={{ marginBottom: 24 }}>
               <div className="section-title">Global Summary</div>
               <div className="grid-3" style={{ marginBottom: 16 }}>
-                <StatBox label="Total Scheduler Runs" value={overall?.total_runs} color="var(--accent)" />
+                <StatBox label="Total Scheduler Runs" value={overall?.total_runs} />
                 <StatBox label="Avg Overload Rate" value={overall?.avg_overload?.toFixed(2)+'%'} color="var(--red)" />
-                <StatBox label="Avg CPU Usage" value={overall?.avg_cpu?.toFixed(2)+'%'} color="var(--cyan)" />
+                <StatBox label="Avg CPU Usage" value={overall?.avg_cpu?.toFixed(2)+'%'} />
               </div>
 
               <div className="grid-2">
                 <div>
-                  <div style={{ fontWeight:700, color:'var(--red)', fontSize:13, marginBottom:8 }}>
-                    🔴 Reactive Scheduler
+                  <div style={{ fontWeight:700, color:'var(--text-secondary)', fontSize:13, marginBottom:8 }}>
+                    Reactive (Baseline)
                   </div>
                   <div className="grid-2">
                     <StatBox label="Runs"         value={react?.total_runs} />
@@ -76,8 +76,8 @@ export default function MetricsPage() {
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontWeight:700, color:'var(--green)', fontSize:13, marginBottom:8 }}>
-                    🟢 Predictive Scheduler
+                  <div style={{ fontWeight:700, color:'var(--text-secondary)', fontSize:13, marginBottom:8 }}>
+                    Predictive (Proposed)
                   </div>
                   <div className="grid-2">
                     <StatBox label="Runs"         value={pred?.total_runs} />
@@ -120,7 +120,7 @@ export default function MetricsPage() {
 
             {records.length === 0 ? (
               <div className="empty-state">
-                <span className="empty-state-icon">📊</span>
+                <span className="empty-state-icon">—</span>
                 <span>No scheduler runs yet — run a comparison first.</span>
               </div>
             ) : (

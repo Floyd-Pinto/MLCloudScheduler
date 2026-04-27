@@ -18,11 +18,11 @@ import joblib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-WINDOW_SIZE = 15
+WINDOW_SIZE = 20
 HORIZON     = 5
-HIDDEN_SIZE = 64
+HIDDEN_SIZE = 128
 NUM_LAYERS  = 2
-EPOCHS      = 80
+EPOCHS      = 150
 LR          = 0.001
 BATCH_SIZE  = 64
 MODEL_DIR   = os.path.join(os.path.dirname(__file__), "saved_models")
@@ -56,15 +56,21 @@ class LSTMForecaster:
                 self.lstm = nn.LSTM(
                     input_size=1, hidden_size=hidden,
                     num_layers=layers, batch_first=True,
-                    dropout=0.2 if layers > 1 else 0.0,
+                    dropout=0.25 if layers > 1 else 0.0,
                 )
-                self.fc1  = nn.Linear(hidden, 32)
+                self.bn   = nn.BatchNorm1d(hidden)
+                self.fc1  = nn.Linear(hidden, 64)
                 self.relu = nn.ReLU()
-                self.fc2  = nn.Linear(32, 1)
+                self.drop = nn.Dropout(0.15)
+                self.fc2  = nn.Linear(64, 32)
+                self.fc3  = nn.Linear(32, 1)
 
             def forward(self, x):          # x: (B, T, 1)
                 out, _ = self.lstm(x)
-                out = self.fc2(self.relu(self.fc1(out[:, -1, :])))
+                out = self.bn(out[:, -1, :])
+                out = self.drop(self.relu(self.fc1(out)))
+                out = self.relu(self.fc2(out))
+                out = self.fc3(out)
                 return out.squeeze(-1)
 
         return _Net(self.hidden, self.layers)

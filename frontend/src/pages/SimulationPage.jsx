@@ -58,7 +58,7 @@ export default function SimulationPage() {
   return (
     <div>
       <div className="page-header">
-        <div className="page-title">⚡ Workload Simulation</div>
+        <div className="page-title">Workload Simulation</div>
         <div className="page-subtitle">Generate synthetic cloud workload patterns for scheduler testing.</div>
       </div>
 
@@ -104,7 +104,7 @@ export default function SimulationPage() {
 
           <button className="btn btn-primary btn-lg" style={{width:'100%'}}
             onClick={handleGenerate} disabled={loading}>
-            {loading ? <><span className="loading-spinner"/>&nbsp;Generating…</> : '⚡ Generate Workload'}
+            {loading ? <><span className="loading-spinner"/>&nbsp;Generating…</> : 'Generate Workload'}
           </button>
         </div>
 
@@ -115,7 +115,7 @@ export default function SimulationPage() {
             <WorkloadChart records={selected.datapoints} title={`${selected.pattern} | ${selected.steps} steps`} />
           ) : (
             <div className="empty-state">
-              <span className="empty-state-icon">📈</span>
+              <span className="empty-state-icon">—</span>
               <span>Generate a workload to preview the chart</span>
             </div>
           )}
@@ -142,7 +142,7 @@ export default function SimulationPage() {
         </div>
         {runs.length === 0 ? (
           <div className="empty-state">
-            <span className="empty-state-icon">📋</span>
+            <span className="empty-state-icon">—</span>
             <span>No runs yet — generate a workload above.</span>
           </div>
         ) : (

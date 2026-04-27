@@ -22,7 +22,7 @@ from model.workload_generator import generate_gradual, generate_spike, generate_
 
 
 def build_full_series(seed=42) -> np.ndarray:
-    """Combined training series from all patterns."""
+    """Combined training series from all patterns — diverse enough for LSTM."""
     s = np.concatenate([
         generate_gradual(steps=500, seed=seed),
         generate_spike(steps=500, seed=seed+1),
@@ -30,6 +30,11 @@ def build_full_series(seed=42) -> np.ndarray:
         generate_combined(steps=600, seed=seed+3),
         generate_gradual(steps=400, seed=seed+4),
         generate_spike(steps=400, spike_at=200, seed=seed+5),
+        # Extra diversity for better LSTM generalisation
+        generate_periodic(steps=400, seed=seed+6),
+        generate_combined(steps=500, seed=seed+7),
+        generate_spike(steps=300, spike_at=100, seed=seed+8),
+        generate_gradual(steps=400, seed=seed+9),
     ])
     return s
 

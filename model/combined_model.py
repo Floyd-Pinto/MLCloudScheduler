@@ -52,30 +52,33 @@ class CombinedForecaster:
         if verbose:
             print(f"\n  [Combined] w_lstm={self.w_lstm:.3f}  w_arima={self.w_arima:.3f}")
 
-        # Evaluate combined on same test split (last 30%)
-        test_size   = max(30, int(len(series) * 0.30))
-        test_series = series[-test_size:]
-        train_hist  = list(series[:-test_size])
+        # Evaluate combined: walk-forward on test split
+        HORIZON    = 5
+        test_size  = max(50, int(len(series) * 0.25))
+        eval_start = len(series) - test_size
+        preds, actuals = [], []
 
-        preds = []
-        for t in range(len(test_series)):
-            hist = train_hist + list(test_series[:t])
+        for t in range(eval_start, len(series) - HORIZON):
+            hist = list(series[:t + 1])
+            actual_val = float(series[t + HORIZON])
             try:
                 p_lstm  = self.lstm.predict(hist)
             except Exception:
                 p_lstm  = hist[-1]
             try:
-                p_arima = self.arima.predict(hist, steps=5)
+                p_arima = self.arima.predict(hist, steps=HORIZON)
             except Exception:
                 p_arima = hist[-1]
-            preds.append(self.w_lstm * p_lstm + self.w_arima * p_arima)
+            combined_pred = self.w_lstm * p_lstm + self.w_arima * p_arima
+            preds.append(combined_pred)
+            actuals.append(actual_val)
 
-        preds = np.array(preds)
-        true  = test_series
+        preds   = np.array(preds)
+        actuals = np.array(actuals)
 
-        rmse = float(np.sqrt(mean_squared_error(true, preds)))
-        mae  = float(mean_absolute_error(true, preds))
-        r2   = float(r2_score(true, preds))
+        rmse = float(np.sqrt(mean_squared_error(actuals, preds)))
+        mae  = float(mean_absolute_error(actuals, preds))
+        r2   = float(r2_score(actuals, preds))
 
         self._ready = True
         return {
