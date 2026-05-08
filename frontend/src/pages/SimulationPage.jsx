@@ -1,5 +1,5 @@
-// src/pages/SimulationPage.jsx
-import { useState, useEffect } from 'react';
+// src/pages/SimulationPage.jsx — Phase 2: Live Mode toggle + multi-resource support
+import { useState, useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { simulationAPI } from '../services/api';
 import WorkloadChart from '../charts/WorkloadChart';
@@ -19,6 +19,11 @@ export default function SimulationPage() {
   const [loading, setLoading] = useState(false);
   const [selected,setSelected]= useState(null);
 
+  // Live mode state
+  const [liveMode, setLiveMode]           = useState(false);
+  const [displayedSteps, setDisplayedSteps] = useState([]);
+  const intervalRef = useRef(null);
+
   useEffect(() => { fetchRuns(); }, []);
 
   const fetchRuns = () =>
@@ -30,6 +35,7 @@ export default function SimulationPage() {
       const res = await simulationAPI.generate(form);
       toast.success(`Workload generated — ${res.data.steps} steps (${res.data.pattern})`);
       setSelected(res.data);
+      setDisplayedSteps([]);
       fetchRuns();
     } catch (e) {
       toast.error(e.response?.data?.error || 'Generation failed');
@@ -42,6 +48,7 @@ export default function SimulationPage() {
     try {
       const res = await simulationAPI.getRun(id);
       setSelected(res.data);
+      setDisplayedSteps([]);
     } catch { toast.error('Failed to load run'); }
   };
 
@@ -55,11 +62,50 @@ export default function SimulationPage() {
     } catch { toast.error('Delete failed'); }
   };
 
+  /* ── Live Mode: reveal data points one by one ─────────────────────────── */
+  useEffect(() => {
+    // Clear any existing interval
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    if (!liveMode || !selected?.datapoints?.length) {
+      return;
+    }
+
+    setDisplayedSteps([]);
+    let i = 0;
+    intervalRef.current = setInterval(() => {
+      if (i >= selected.datapoints.length) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+        return;
+      }
+      setDisplayedSteps(prev => [...prev, selected.datapoints[i]]);
+      i++;
+    }, 80);
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [liveMode, selected]);
+
+  /* ── Chart data: live mode shows progressive reveal, normal shows all ── */
+  const chartData = liveMode && displayedSteps.length > 0
+    ? displayedSteps
+    : selected?.datapoints;
+
   return (
     <div>
       <div className="page-header">
         <div className="page-title">Workload Simulation</div>
-        <div className="page-subtitle">Generate synthetic cloud workload patterns for scheduler testing.</div>
+        <div className="page-subtitle">
+          Generate synthetic multi-resource cloud workload patterns (CPU, Memory, Network I/O) for scheduler testing.
+        </div>
       </div>
 
       <div className="grid-2" style={{ marginBottom: 24 }}>
@@ -106,13 +152,36 @@ export default function SimulationPage() {
             onClick={handleGenerate} disabled={loading}>
             {loading ? <><span className="loading-spinner"/>&nbsp;Generating…</> : 'Generate Workload'}
           </button>
+
+          {/* Live Mode toggle */}
+          {selected?.datapoints && (
+            <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '10px 14px', background: 'var(--bg-input)',
+                          borderRadius: 'var(--radius-md)', border: '1px solid var(--border)' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
+                              fontSize: 13, fontWeight: 600, color: liveMode ? 'var(--green)' : 'var(--text-muted)' }}>
+                <input type="checkbox" checked={liveMode}
+                  onChange={e => setLiveMode(e.target.checked)}
+                  style={{ accentColor: 'var(--green)', width: 16, height: 16 }} />
+                Live Mode
+              </label>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {liveMode
+                  ? `${displayedSteps.length} / ${selected.datapoints.length} steps`
+                  : 'Toggle to animate data reveal'}
+              </span>
+              {liveMode && displayedSteps.length > 0 && displayedSteps.length < selected.datapoints.length && (
+                <span className="pulse-dot" />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Pattern preview */}
         <div className="card">
           <div className="section-title">Pattern Preview — {form.pattern}</div>
-          {selected?.datapoints ? (
-            <WorkloadChart records={selected.datapoints} title={`${selected.pattern} | ${selected.steps} steps`} />
+          {chartData ? (
+            <WorkloadChart records={chartData} title={`${selected.pattern} | ${selected.steps} steps`} />
           ) : (
             <div className="empty-state">
               <span className="empty-state-icon">—</span>
@@ -126,6 +195,7 @@ export default function SimulationPage() {
                 ['Steps',    selected.steps],
                 ['Seed',     selected.seed],
                 ['ID',       `#${selected.id}`],
+                ['Resources', 'CPU · Memory · Network'],
               ].map(([k,v]) => (
                 <span key={k} className="badge badge-blue">{k}: {v}</span>
               ))}

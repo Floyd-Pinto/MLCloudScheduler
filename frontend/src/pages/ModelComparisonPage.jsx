@@ -1,5 +1,4 @@
-// src/pages/ModelComparisonPage.jsx
-// Full model comparison: GBR vs LSTM vs ARIMA vs Combined
+// src/pages/ModelComparisonPage.jsx — Phase 2: per-resource metrics + live API data
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { mlAPI } from '../services/api';
@@ -8,19 +7,11 @@ import ModelRadarChart from '../charts/RadarChart';
 import BarCompareChart from '../charts/BarCompareChart';
 
 const MODEL_META = {
-  gbr:      { label: 'GBR',      color: 'var(--accent)',  badge: 'badge-blue',   icon: '🌲', desc: 'GradientBoosting Regressor' },
-  lstm:     { label: 'LSTM',     color: 'var(--purple)',  badge: 'badge-purple', icon: '🧠', desc: 'Long Short-Term Memory (PyTorch)' },
-  arima:    { label: 'ARIMA',    color: 'var(--yellow)',  badge: 'badge-yellow', icon: '📈', desc: 'ARIMA (Auto-Regressive Integrated MA)' },
-  combined: { label: 'Combined', color: 'var(--green)',   badge: 'badge-green',  icon: '⚡', desc: 'Hybrid LSTM + ARIMA Ensemble' },
+  gbr:      { label: 'GBR',      color: 'var(--accent)',  badge: 'badge-blue',   icon: '🌲', desc: 'MultiOutput GradientBoosting Regressor' },
+  lstm:     { label: 'LSTM',     color: 'var(--purple)',  badge: 'badge-purple', icon: '🧠', desc: 'Multi-Resource LSTM (20×3 → 5×3)' },
+  arima:    { label: 'ARIMA',    color: 'var(--yellow)',  badge: 'badge-yellow', icon: '📈', desc: 'Per-Channel ARIMA (independent per resource)' },
+  combined: { label: 'Combined', color: 'var(--green)',   badge: 'badge-green',  icon: '⚡', desc: 'Hybrid Ensemble (per-resource inverse-RMSE)' },
 };
-
-const BAR_METRICS = [
-  { key: 'r2',   label: 'R² Score' },
-];
-const BAR_METRICS2 = [
-  { key: 'rmse', label: 'RMSE' },
-  { key: 'mae',  label: 'MAE'  },
-];
 
 function MetricCard({ model, metrics }) {
   const m    = MODEL_META[model];
@@ -130,12 +121,33 @@ export default function ModelComparisonPage() {
   const statuses = status?.statuses || {};
   const metrics  = result?.metrics;
 
+  /* ── Build per-resource metrics table from status API extra_info ────── */
+  const perResourceData = {};
+  for (const mt of ['gbr', 'lstm', 'arima', 'combined']) {
+    const info = status?.[mt];
+    if (info) {
+      const extra = info.extra_info || {};
+      perResourceData[mt] = {
+        cpu_r2:     extra.cpu_r2     ?? extra.r2_cpu     ?? null,
+        cpu_rmse:   extra.cpu_rmse   ?? extra.rmse_cpu   ?? null,
+        mem_r2:     extra.memory_r2  ?? extra.r2_memory  ?? null,
+        mem_rmse:   extra.memory_rmse?? extra.rmse_memory ?? null,
+        net_r2:     extra.network_r2 ?? extra.r2_network ?? null,
+        net_rmse:   extra.network_rmse ?? extra.rmse_network ?? null,
+        overall_r2: info.r2,
+        overall_rmse: info.rmse,
+      };
+    }
+  }
+  const hasPerResource = Object.values(perResourceData).some(d =>
+    d.cpu_r2 != null || d.mem_r2 != null || d.net_r2 != null);
+
   return (
     <div>
       <div className="page-header">
-        <div className="page-title">🔬 Model Comparison</div>
+        <div className="page-title">Model Comparison</div>
         <div className="page-subtitle">
-          Compare GBR · LSTM · ARIMA · Combined (LSTM+ARIMA Ensemble) on the same workload.
+          Compare GBR · LSTM · ARIMA · Combined (LSTM+ARIMA Ensemble) — multi-resource forecasting.
         </div>
       </div>
 
@@ -155,6 +167,46 @@ export default function ModelComparisonPage() {
           </div>
         ))}
       </div>
+
+      {/* Per-resource breakdown table — from live /api/ml/status/ */}
+      {hasPerResource && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div className="section-title">Per-Resource Performance Breakdown</div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Model</th>
+                  <th>CPU R²</th><th>CPU RMSE</th>
+                  <th>MEM R²</th><th>MEM RMSE</th>
+                  <th>NET R²</th><th>NET RMSE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(perResourceData).map(([mt, d]) => (
+                  <tr key={mt}>
+                    <td style={{ fontWeight: 700, color: MODEL_META[mt]?.color || 'var(--text-primary)' }}>
+                      {MODEL_META[mt]?.icon} {MODEL_META[mt]?.label}
+                    </td>
+                    <td style={{ color: (d.cpu_r2 ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)' }}>
+                      {d.cpu_r2?.toFixed(4) ?? '—'}
+                    </td>
+                    <td>{d.cpu_rmse?.toFixed(4) ?? '—'}</td>
+                    <td style={{ color: (d.mem_r2 ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)' }}>
+                      {d.mem_r2?.toFixed(4) ?? '—'}
+                    </td>
+                    <td>{d.mem_rmse?.toFixed(4) ?? '—'}</td>
+                    <td style={{ color: (d.net_r2 ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)' }}>
+                      {d.net_r2?.toFixed(4) ?? '—'}
+                    </td>
+                    <td>{d.net_rmse?.toFixed(4) ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Controls */}
       <div className="card" style={{ marginBottom:24 }}>
@@ -179,10 +231,10 @@ export default function ModelComparisonPage() {
           </div>
           <div style={{ display:'flex', gap:8 }}>
             <button className="btn btn-primary" onClick={handleCompare} disabled={loading}>
-              {loading ? <><span className="loading-spinner"/>&nbsp;Running…</> : '📊 Run Comparison'}
+              {loading ? <><span className="loading-spinner"/>&nbsp;Running…</> : 'Run Comparison'}
             </button>
             <button className="btn btn-success" onClick={handleTrainAll} disabled={loading}>
-              {loading ? <><span className="loading-spinner"/>&nbsp;Training…</> : '🚀 Train All'}
+              {loading ? <><span className="loading-spinner"/>&nbsp;Training…</> : 'Train All'}
             </button>
           </div>
         </div>
@@ -193,14 +245,14 @@ export default function ModelComparisonPage() {
           {/* Best model banner */}
           {result.best_model && (
             <div style={{
-              background:'linear-gradient(135deg,rgba(16,185,129,0.1),rgba(59,130,246,0.1))',
-              border:'1px solid rgba(16,185,129,0.3)',
+              background:'linear-gradient(135deg,rgba(229,229,229,0.05),rgba(120,120,120,0.05))',
+              border:'1px solid rgba(229,229,229,0.15)',
               borderRadius:'var(--radius-lg)', padding:'14px 22px',
               marginBottom:20, display:'flex', alignItems:'center', gap:14,
             }}>
-              <span style={{ fontSize:30 }}>🏆</span>
+              <span style={{ fontSize:30 }}>◈</span>
               <div>
-                <div style={{ fontWeight:800, fontSize:16, color:'var(--green)' }}>
+                <div style={{ fontWeight:800, fontSize:16, color:'var(--text-primary)' }}>
                   Best Model: {result.best_model.toUpperCase()} — R²={metrics?.[result.best_model]?.r2?.toFixed(4)}
                 </div>
                 <div style={{ fontSize:13, color:'var(--text-muted)' }}>
@@ -226,7 +278,7 @@ export default function ModelComparisonPage() {
                     const d = metrics?.[mt];
                     const isBest = mt === result.best_model;
                     return (
-                      <tr key={mt} style={{ background: isBest ? 'rgba(16,185,129,0.05)' : '' }}>
+                      <tr key={mt} style={{ background: isBest ? 'rgba(229,229,229,0.03)' : '' }}>
                         <td>
                           <span style={{ display:'flex', alignItems:'center', gap:6 }}>
                             {m.icon}
@@ -256,9 +308,9 @@ export default function ModelComparisonPage() {
           {/* Chart tabs */}
           <div className="card" style={{ marginBottom:24 }}>
             <div className="tabs">
-              <button className={`tab-btn ${chart==='forecast'?'active':''}`} onClick={()=>setChart('forecast')}>📈 Forecast vs Actual</button>
-              <button className={`tab-btn ${chart==='radar'?'active':''}`}    onClick={()=>setChart('radar')}>🕸 Radar Chart</button>
-              <button className={`tab-btn ${chart==='bar'?'active':''}`}      onClick={()=>setChart('bar')}>📊 Bar Comparison</button>
+              <button className={`tab-btn ${chart==='forecast'?'active':''}`} onClick={()=>setChart('forecast')}>Forecast vs Actual</button>
+              <button className={`tab-btn ${chart==='radar'?'active':''}`}    onClick={()=>setChart('radar')}>Radar Chart</button>
+              <button className={`tab-btn ${chart==='bar'?'active':''}`}      onClick={()=>setChart('bar')}>Bar Comparison</button>
             </div>
 
             {chart === 'forecast' && (
@@ -313,19 +365,19 @@ export default function ModelComparisonPage() {
             )}
           </div>
 
-          {/* Architecture explainer */}
+          {/* Architecture explainer — updated for Phase 2 */}
           <div className="card">
-            <div className="section-title">Model Architecture Notes</div>
+            <div className="section-title">Model Architecture Notes — Phase 2</div>
             <div className="grid-2">
               {[
-                { icon:'🌲', title:'GradientBoosting Regressor', color:'var(--accent)',
-                  points:['Ensemble of 200 decision trees','Sliding window (10 steps) → features','Trained on 3200+ samples across all patterns','Training: ~2s  |  Inference: <1ms'] },
-                { icon:'🧠', title:'LSTM Neural Network (PyTorch)', color:'var(--purple)',
-                  points:['2-layer LSTM + FC head','Input: (batch, seq=15, 1)  →  Output: scalar','Adam optimizer, ReduceLROnPlateau scheduler','Training: ~20s  |  Inference: <5ms'] },
-                { icon:'📈', title:'ARIMA', color:'var(--yellow)',
-                  points:['Auto-selected order via AIC minimization','Walk-forward validation on test set','Captures linear autocorrelation + trend','Training: ~10s  |  Inference: ~100ms'] },
-                { icon:'⚡', title:'Combined Hybrid (LSTM + ARIMA)', color:'var(--green)',
-                  points:['Weighted ensemble by inverse RMSE','w_lstm ≈ 0.12, w_arima ≈ 0.88 (data-driven)','ARIMA handles trend, LSTM handles non-linearity','Best stability on periodic + combined patterns'] },
+                { icon:'🌲', title:'MultiOutput GBR (Baseline)', color:'var(--accent)',
+                  points:['Ensemble of 200 decision trees','Sliding window: 20×3 = 60 input features → 5×3 = 15 outputs','MultiOutputRegressor wrapping GradientBoostingRegressor','Training: ~30s  |  Inference: <5ms'] },
+                { icon:'🧠', title:'Multi-Resource LSTM (PyTorch)', color:'var(--purple)',
+                  points:['2-layer LSTM (hidden=128) + BatchNorm1d + FC decoder','Input: (batch, 20, 3) — CPU/Memory/Network →  Output: (batch, 5, 3)','150 epochs, CosineAnnealingWarmRestarts, gradient clipping','Training: ~45s  |  Inference: <5ms'] },
+                { icon:'📈', title:'Per-Channel ARIMA', color:'var(--yellow)',
+                  points:['3 independent ARIMA(p,d,q) models — one per resource','AIC grid search: 32 combinations per channel (p∈[0,3], d∈[0,1], q∈[0,3])','Walk-forward validation on 20% holdout per channel','Training: ~30s  |  Inference: ~100ms'] },
+                { icon:'⚡', title:'Combined Hybrid Ensemble', color:'var(--green)',
+                  points:['Per-resource inverse-RMSE weights — independent per CPU/Memory/Network','LSTM may dominate CPU, ARIMA may dominate memory (data-driven)','forecast_r = w_lstm_r × LSTM_r + w_arima_r × ARIMA_r','Best stability on mixed/combined workload patterns'] },
               ].map(({ icon, title, color, points }) => (
                 <div key={title} style={{
                   background:'var(--bg-input)', border:'1px solid var(--border-subtle)',

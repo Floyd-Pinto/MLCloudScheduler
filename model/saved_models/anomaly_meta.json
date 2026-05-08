@@ -1,0 +1,5 @@
+{
+  "z_threshold": 3.0,
+  "rolling_window": 30,
+  "contamination": 0.05
+}

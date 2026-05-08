@@ -1,4 +1,4 @@
-"""simulation/serializers.py"""
+"""simulation/serializers.py — Updated for Phase 2 multi-resource fields."""
 
 from rest_framework import serializers
 from .models import WorkloadRun, WorkloadDataPoint
@@ -7,7 +7,7 @@ from .models import WorkloadRun, WorkloadDataPoint
 class WorkloadDataPointSerializer(serializers.ModelSerializer):
     class Meta:
         model  = WorkloadDataPoint
-        fields = ["time_step", "workload"]
+        fields = ["time_step", "workload", "memory_usage", "network_io"]
 
 
 class WorkloadRunSerializer(serializers.ModelSerializer):

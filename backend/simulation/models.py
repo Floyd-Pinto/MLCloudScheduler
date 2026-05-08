@@ -1,4 +1,4 @@
-"""simulation/models.py"""
+"""simulation/models.py — Updated for Phase 2 multi-resource telemetry."""
 
 from django.db import models
 
@@ -24,9 +24,12 @@ class WorkloadRun(models.Model):
 
 
 class WorkloadDataPoint(models.Model):
-    run       = models.ForeignKey(WorkloadRun, on_delete=models.CASCADE, related_name="datapoints")
-    time_step = models.IntegerField()
-    workload  = models.FloatField()
+    run          = models.ForeignKey(WorkloadRun, on_delete=models.CASCADE, related_name="datapoints")
+    time_step    = models.IntegerField()
+    workload     = models.FloatField()
+    # Phase 2: multi-resource fields
+    memory_usage = models.FloatField(default=0.0)
+    network_io   = models.FloatField(default=0.0)
 
     class Meta:
         ordering = ["time_step"]

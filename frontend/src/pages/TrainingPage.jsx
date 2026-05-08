@@ -4,15 +4,18 @@ import toast from 'react-hot-toast';
 import { mlAPI } from '../services/api';
 
 const MODELS = [
-  { key: 'lstm',     name: 'LSTM Neural Network',
-    desc: '2-layer LSTM with 128 hidden units, BatchNorm, and 3 fully-connected layers. Input window: 20 steps, horizon: 5 steps.',
+  { key: 'lstm',     name: 'Multi-Resource LSTM',
+    desc: '2-layer LSTM (hidden=128) with BatchNorm. Input: 20×3 (CPU, Memory, Network), Output: 5×3 forecast horizon. 150 epochs with cosine annealing.',
     type: 'Deep Learning' },
-  { key: 'arima',    name: 'ARIMA',
-    desc: 'Auto-selected order via AIC grid search. Walk-forward validation on 300-step segment. Statistical baseline.',
+  { key: 'arima',    name: 'Per-Channel ARIMA',
+    desc: 'Independent ARIMA models per resource with auto-selected (p,d,q) via AIC grid search over 32 combinations per channel. Walk-forward validation.',
     type: 'Statistical' },
-  { key: 'combined', name: 'Combined Hybrid (LSTM + ARIMA)',
-    desc: 'Weighted ensemble — blends LSTM and ARIMA predictions using inverse-RMSE weighting so the more accurate model has higher influence.',
+  { key: 'combined', name: 'Adaptive Hybrid Ensemble',
+    desc: 'LSTM + ARIMA with per-resource inverse-RMSE weights — each resource dimension gets independent model preference. Combined R² typically exceeds individual models.',
     type: 'Ensemble' },
+  { key: 'gbr',      name: 'Multi-Output GBR',
+    desc: 'MultiOutputRegressor(GradientBoostingRegressor). 200 estimators, max_depth=5. Input: flattened 20×3=60 features, Output: 5×3=15 targets.',
+    type: 'Baseline' },
 ];
 
 export default function TrainingPage() {

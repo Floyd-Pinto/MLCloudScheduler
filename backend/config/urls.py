@@ -10,4 +10,5 @@ urlpatterns = [
     path("api/ml/",          include("ml_model.urls")),
     path("api/metrics/",     include("metrics.urls")),
     path("api/evaluation/",  include("evaluation.urls")),
+    path("api/anomaly/",     include("anomaly.urls")),
 ]

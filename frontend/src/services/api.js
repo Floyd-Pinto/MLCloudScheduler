@@ -1,4 +1,4 @@
-// src/services/api.js — updated with new endpoints
+// src/services/api.js — updated with anomaly endpoints
 import axios from 'axios';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -49,6 +49,12 @@ export const evaluationAPI = {
   run:        (data)    => api.post('/evaluation/run/', data),
   list:       ()        => api.get('/evaluation/'),
   comparison: (pattern) => api.get('/evaluation/comparison/', { params: pattern ? { pattern } : {} }),
+};
+
+// ── Anomaly ─────────────────────────────────────────────────
+export const anomalyAPI = {
+  logs:    () => api.get('/anomaly/logs/'),
+  summary: () => api.get('/anomaly/summary/'),
 };
 
 export default api;

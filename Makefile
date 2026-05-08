@@ -1,19 +1,21 @@
-.PHONY: help install train backend frontend dev clean
+.PHONY: help install train migrate backend frontend dev docker-up docker-down test-api clean
 
 VENV = source .venv/bin/activate &&
 NODE = export NVM_DIR="$$HOME/.nvm" && . "$$NVM_DIR/nvm.sh" &&
 
 help:
 	@echo ""
-	@echo "  ML-Based Adaptive Cloud Resource Scheduling (V3)"
-	@echo "  ================================================"
+	@echo "  ML-Based Adaptive Cloud Resource Scheduling (Phase 2)"
+	@echo "  ======================================================="
 	@echo ""
 	@echo "  make install     Install all Python + Node dependencies"
-	@echo "  make train       Train all 4 ML models (GBR, LSTM, ARIMA, Combined)"
+	@echo "  make train       Train all 5 ML models (GBR, LSTM, ARIMA, Combined, AnomalyDetector)"
 	@echo "  make migrate     Run Django migrations"
 	@echo "  make backend     Start Django backend (port 8000)"
 	@echo "  make frontend    Start React frontend (port 5173)"
 	@echo "  make dev         Start BOTH backend and frontend"
+	@echo "  make docker-up   Build and run all 3 Docker services"
+	@echo "  make docker-down Stop Docker services"
 	@echo "  make test-api    Quick smoke-test all API endpoints"
 	@echo "  make clean       Remove pycache and build artifacts"
 	@echo ""
@@ -27,7 +29,7 @@ install:
 	$(NODE) cd frontend && npm install
 
 train:
-	$(VENV) python model/train_all.py
+	$(VENV) MPLBACKEND=Agg python model/train_all.py
 
 migrate:
 	$(VENV) cd backend && python manage.py makemigrations && python manage.py migrate
@@ -42,6 +44,12 @@ dev:
 	@echo "Starting backend on :8000 and frontend on :5173 ..."
 	$(VENV) cd backend && python manage.py runserver 8000 &
 	$(NODE) cd frontend && npm run dev
+
+docker-up:
+	docker compose up --build
+
+docker-down:
+	docker compose down
 
 test-api:
 	@echo "Testing all endpoints..."
@@ -59,6 +67,7 @@ test-api:
 	  && echo "✓ ml/predict-all"
 	@curl -sf http://localhost:8000/api/ml/compare-models/ > /dev/null && echo "✓ ml/compare-models"
 	@curl -sf http://localhost:8000/api/metrics/summary/ > /dev/null && echo "✓ metrics/summary"
+	@curl -sf http://localhost:8000/api/anomaly/summary/ > /dev/null && echo "✓ anomaly/summary"
 	@echo "All API checks passed ✅"
 
 clean:

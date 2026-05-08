@@ -1,4 +1,4 @@
-"""scheduler/models.py"""
+"""scheduler/models.py — Updated for Phase 2 multi-resource scheduling."""
 
 from django.db import models
 from simulation.models import WorkloadRun
@@ -22,6 +22,12 @@ class SchedulerRun(models.Model):
     total_cost       = models.FloatField(default=0.0)
     scale_up_count   = models.IntegerField(default=0)
     scale_down_count = models.IntegerField(default=0)
+    # Phase 2: per-resource overload counts
+    overload_cpu_count     = models.IntegerField(default=0)
+    overload_memory_count  = models.IntegerField(default=0)
+    overload_network_count = models.IntegerField(default=0)
+    avg_memory       = models.FloatField(default=0.0)
+    avg_network      = models.FloatField(default=0.0)
 
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -35,13 +41,17 @@ class SchedulerRun(models.Model):
 class SchedulerAction(models.Model):
     ACTION_CHOICES = [("scale_up", "Scale Up"), ("scale_down", "Scale Down"), ("hold", "Hold")]
 
-    run       = models.ForeignKey(SchedulerRun, on_delete=models.CASCADE, related_name="actions")
-    time_step = models.IntegerField()
-    workload  = models.FloatField()
-    capacity  = models.IntegerField()
-    cpu_usage = models.FloatField()
-    overloaded= models.BooleanField(default=False)
-    action    = models.CharField(max_length=15, choices=ACTION_CHOICES, default="hold")
+    run              = models.ForeignKey(SchedulerRun, on_delete=models.CASCADE, related_name="actions")
+    time_step        = models.IntegerField()
+    workload         = models.FloatField()
+    capacity         = models.IntegerField()
+    cpu_usage        = models.FloatField()
+    overloaded       = models.BooleanField(default=False)
+    action           = models.CharField(max_length=15, choices=ACTION_CHOICES, default="hold")
+    # Phase 2: multi-resource fields
+    memory_usage     = models.FloatField(default=0.0)
+    network_io       = models.FloatField(default=0.0)
+    trigger_resource = models.CharField(max_length=50, default="none")
 
     class Meta:
         ordering = ["time_step"]

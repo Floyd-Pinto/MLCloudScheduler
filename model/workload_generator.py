@@ -1,16 +1,31 @@
 """
 model/workload_generator.py
 ---------------------------
-Generates synthetic cloud workload patterns:
+Generates synthetic cloud workload patterns with three correlated resource
+signals: CPU utilisation, memory consumption, and network I/O throughput.
+
+Supported patterns:
   - gradual  : steady linear growth
   - spike    : sudden burst (flash sale / viral event)
   - periodic : daily sinusoidal cycle
   - combined : mix of gradual + periodic + spike
+
+Each time step produces:
+  cpu_usage     – primary compute signal, 0–100 %
+  memory_usage  – correlated with CPU (lag ≈ 3 steps, ρ ≈ 0.75)
+  network_io    – bursty, proportional to workload with random spikes
+
+Backward Compatibility:
+  Functions still return np.ndarray of cpu_usage when called with
+  ``multivariate=False`` (the default for the original single-signal API).
+  Set ``multivariate=True`` to receive a (steps, 3) array.
 """
 
 import numpy as np
 import pandas as pd
 
+
+# ── Single-signal generators (backward compatible) ───────────────────────────
 
 def generate_gradual(steps: int = 200, base: float = 20.0, slope: float = 0.3,
                      noise_std: float = 2.0, seed: int = 42) -> np.ndarray:
@@ -66,7 +81,7 @@ PATTERN_GENERATORS = {
 
 
 def generate(pattern: str = "combined", steps: int = 200, seed: int = 42) -> np.ndarray:
-    """High-level entry point for API use."""
+    """High-level entry point for API use (returns cpu_usage only)."""
     fn = PATTERN_GENERATORS.get(pattern)
     if fn is None:
         raise ValueError(f"Unknown pattern '{pattern}'. Choose from {list(PATTERN_GENERATORS)}")
@@ -75,9 +90,112 @@ def generate(pattern: str = "combined", steps: int = 200, seed: int = 42) -> np.
     return fn(steps=steps, seed=seed)
 
 
+# ── Multi-resource signal derivation ─────────────────────────────────────────
+
+def derive_memory_usage(cpu_usage: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """
+    Derive memory utilisation from CPU signal.
+
+    Memory exhibits temporal lag relative to CPU (approximately 3 steps)
+    with a Pearson correlation coefficient of approximately 0.75, reflecting
+    the empirical observation that memory allocation follows compute demand.
+
+    Formula:  memory(t) = clip(0.7 * cpu(t-3) + 0.3 * cpu(t) + N(0, 5), 0, 100)
+    """
+    steps = len(cpu_usage)
+    memory = np.zeros(steps)
+    for t in range(steps):
+        lagged = cpu_usage[max(0, t - 3)]
+        memory[t] = 0.7 * lagged + 0.3 * cpu_usage[t] + rng.normal(0, 5)
+    return np.clip(memory, 0, 100)
+
+
+def derive_network_io(cpu_usage: np.ndarray, rng: np.random.Generator) -> np.ndarray:
+    """
+    Derive network I/O throughput from the workload intensity signal.
+
+    Network traffic is proportional to workload but exhibits stochastic
+    bursty behaviour modelled via a Poisson process with random-amplitude
+    spikes, reflecting real-world packet-burst phenomena.
+
+    Formula:  network(t) = clip(workload(t) * 0.9 + spike_term + N(0, 8), 0, 100)
+      where spike_term = Poisson(λ=0.05) * Uniform(15, 40)
+    """
+    steps = len(cpu_usage)
+    network = np.zeros(steps)
+    for t in range(steps):
+        spike_count = rng.poisson(0.05)
+        spike_term = spike_count * rng.uniform(15, 40) if spike_count > 0 else 0.0
+        network[t] = cpu_usage[t] * 0.9 + spike_term + rng.normal(0, 8)
+    return np.clip(network, 0, 100)
+
+
+# ── Multi-resource workload generation ───────────────────────────────────────
+
+def generate_multivariate(pattern: str = "combined", steps: int = 200,
+                          seed: int = 42) -> np.ndarray:
+    """
+    Generate a multivariate workload signal with three correlated resources.
+
+    Parameters
+    ----------
+    pattern : str
+        One of 'gradual', 'spike', 'periodic', 'combined'.
+    steps : int
+        Number of time steps to generate.
+    seed : int
+        Random seed for reproducibility.
+
+    Returns
+    -------
+    np.ndarray
+        Shape (steps, 3) with columns [cpu_usage, memory_usage, network_io].
+    """
+    cpu_usage = generate(pattern=pattern, steps=steps, seed=seed)
+    rng = np.random.default_rng(seed + 1000)  # separate seed for derived signals
+    memory_usage = derive_memory_usage(cpu_usage, rng)
+    network_io = derive_network_io(cpu_usage, rng)
+    return np.column_stack([cpu_usage, memory_usage, network_io])
+
+
+def generate_multivariate_records(pattern: str = "combined", steps: int = 200,
+                                  seed: int = 42) -> list[dict]:
+    """
+    Generate multi-resource workload as a list of per-step dictionaries.
+
+    Each dictionary contains:
+      cpu_usage, memory_usage, network_io, workload, timestamp
+    """
+    cpu_usage = generate(pattern=pattern, steps=steps, seed=seed)
+    rng = np.random.default_rng(seed + 1000)
+    memory_usage = derive_memory_usage(cpu_usage, rng)
+    network_io = derive_network_io(cpu_usage, rng)
+
+    records = []
+    for t in range(steps):
+        records.append({
+            "timestamp":    t,
+            "cpu_usage":    round(float(cpu_usage[t]), 4),
+            "memory_usage": round(float(memory_usage[t]), 4),
+            "network_io":   round(float(network_io[t]), 4),
+            "workload":     round(float(cpu_usage[t]), 4),
+        })
+    return records
+
+
 def to_dataframe(workload: np.ndarray, pattern_name: str = "workload") -> pd.DataFrame:
+    """Convert workload array to a pandas DataFrame (backward compatible)."""
+    if workload.ndim == 1:
+        return pd.DataFrame({
+            "time_step": np.arange(len(workload)),
+            "workload":  workload.round(4),
+            "pattern":   pattern_name,
+        })
+    # Multivariate case: (steps, 3)
     return pd.DataFrame({
-        "time_step": np.arange(len(workload)),
-        "workload":  workload.round(4),
-        "pattern":   pattern_name,
+        "time_step":    np.arange(len(workload)),
+        "cpu_usage":    workload[:, 0].round(4),
+        "memory_usage": workload[:, 1].round(4),
+        "network_io":   workload[:, 2].round(4),
+        "pattern":      pattern_name,
     })

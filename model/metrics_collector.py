@@ -1,8 +1,14 @@
 """
 model/metrics_collector.py
 --------------------------
-Records per-step simulation metrics and computes aggregate statistics
-for comparing reactive vs. predictive schedulers.
+Records per-step simulation metrics across three resource dimensions
+and computes aggregate statistics for comparing reactive vs. predictive
+schedulers.
+
+Each step records:
+  cpu_usage, memory_usage, network_io, capacity,
+  overload_cpu, overload_memory, overload_network, overload_any,
+  scaling_action, trigger_resource, cost
 """
 
 from dataclasses import dataclass, field
@@ -15,30 +21,59 @@ CAPACITY_PER_UNIT: float = 10.0   # each resource unit handles 10 workload units
 
 @dataclass
 class StepRecord:
-    time_step:      int
-    workload:       float
-    capacity:       int
-    cpu_usage:      float   # percent  (capped at 100)
-    overloaded:     bool
-    action:         str     # "scale_up" | "scale_down" | "hold"
-    scheduler_type: str     # "reactive" | "predictive"
+    """Per-step record for multi-resource scheduler simulation."""
+    time_step:        int
+    workload:         float
+    cpu_usage:        float      # percent (capped at 100)
+    memory_usage:     float      # percent (capped at 100)
+    network_io:       float      # percent (capped at 100)
+    capacity:         int
+    overload_cpu:     bool
+    overload_memory:  bool
+    overload_network: bool
+    overload_any:     bool
+    action:           str        # "scale_up" | "scale_down" | "hold"
+    trigger_resource: str        # which resource triggered the action
+    scheduler_type:   str        # "reactive" | "predictive"
+    cost:             float      # cost for this step
 
 
 class MetricsCollector:
-    """Collects per-step records and computes summary statistics."""
+    """Collects per-step multi-resource records and computes summary statistics."""
 
-    def __init__(self, overload_threshold: float = 80.0,
+    def __init__(self, overload_threshold_cpu: float = 80.0,
+                 overload_threshold_memory: float = 80.0,
+                 overload_threshold_network: float = 85.0,
                  cost_per_unit: float = 1.0,
                  scheduler_type: str = "reactive"):
-        self.overload_threshold = overload_threshold
+        self.overload_threshold_cpu     = overload_threshold_cpu
+        self.overload_threshold_memory  = overload_threshold_memory
+        self.overload_threshold_network = overload_threshold_network
         self.cost_per_unit = cost_per_unit
         self.scheduler_type = scheduler_type
         self._records: list[StepRecord] = []
         self._prev_capacity: int | None = None
 
-    def record(self, time_step: int, workload: float, capacity: int):
-        cpu = min((workload / max(capacity * CAPACITY_PER_UNIT, 1)) * 100.0, 100.0)
-        overloaded = cpu > self.overload_threshold
+    def record(self, time_step: int, workload: float, capacity: int,
+               cpu_usage: float = 0.0, memory_usage: float = 0.0,
+               network_io: float = 0.0, trigger_resource: str = "none"):
+        """
+        Record a single time step with multi-resource metrics.
+
+        Parameters
+        ----------
+        workload : float
+            Raw workload intensity for the step.
+        cpu_usage, memory_usage, network_io : float
+            Current resource utilisation percentages (0–100).
+        trigger_resource : str
+            Which resource triggered a scaling action (if any).
+        """
+        overload_cpu     = cpu_usage > self.overload_threshold_cpu
+        overload_memory  = memory_usage > self.overload_threshold_memory
+        overload_network = network_io > self.overload_threshold_network
+        overload_any     = overload_cpu or overload_memory or overload_network
+
         if self._prev_capacity is None:
             action = "hold"
         elif capacity > self._prev_capacity:
@@ -48,9 +83,26 @@ class MetricsCollector:
         else:
             action = "hold"
         self._prev_capacity = capacity
+
+        step_cost = float(capacity) * self.cost_per_unit
+
         self._records.append(
-            StepRecord(time_step, round(workload, 4), capacity,
-                       round(cpu, 4), overloaded, action, self.scheduler_type)
+            StepRecord(
+                time_step=time_step,
+                workload=round(workload, 4),
+                cpu_usage=round(cpu_usage, 4),
+                memory_usage=round(memory_usage, 4),
+                network_io=round(network_io, 4),
+                capacity=capacity,
+                overload_cpu=overload_cpu,
+                overload_memory=overload_memory,
+                overload_network=overload_network,
+                overload_any=overload_any,
+                action=action,
+                trigger_resource=trigger_resource,
+                scheduler_type=self.scheduler_type,
+                cost=step_cost,
+            )
         )
 
     def to_dataframe(self) -> pd.DataFrame:
@@ -58,16 +110,24 @@ class MetricsCollector:
 
     def summary(self) -> dict:
         df = self.to_dataframe()
+        if len(df) == 0:
+            return {"scheduler_type": self.scheduler_type, "total_steps": 0}
         return {
-            "scheduler_type":  self.scheduler_type,
-            "total_steps":     len(df),
-            "overload_events": int(df["overloaded"].sum()),
-            "overload_rate":   round(float(df["overloaded"].mean()) * 100, 2),
-            "avg_cpu":         round(float(df["cpu_usage"].mean()), 2),
-            "avg_capacity":    round(float(df["capacity"].mean()), 2),
-            "total_cost":      round(float(df["capacity"].sum()) * self.cost_per_unit, 2),
-            "scale_up_count":  int((df["action"] == "scale_up").sum()),
-            "scale_down_count":int((df["action"] == "scale_down").sum()),
+            "scheduler_type":    self.scheduler_type,
+            "total_steps":       len(df),
+            "overload_cpu":      int(df["overload_cpu"].sum()),
+            "overload_memory":   int(df["overload_memory"].sum()),
+            "overload_network":  int(df["overload_network"].sum()),
+            "overload_any":      int(df["overload_any"].sum()),
+            "overload_events":   int(df["overload_any"].sum()),  # backward compat
+            "overload_rate":     round(float(df["overload_any"].mean()) * 100, 2),
+            "avg_cpu":           round(float(df["cpu_usage"].mean()), 2),
+            "avg_memory":        round(float(df["memory_usage"].mean()), 2),
+            "avg_network":       round(float(df["network_io"].mean()), 2),
+            "avg_capacity":      round(float(df["capacity"].mean()), 2),
+            "total_cost":        round(float(df["cost"].sum()), 2),
+            "scale_up_count":    int((df["action"] == "scale_up").sum()),
+            "scale_down_count":  int((df["action"] == "scale_down").sum()),
         }
 
     def reset(self):

@@ -1,1 +1,7 @@
-{"window": 20, "hidden": 128, "layers": 2}
+{
+  "hidden_size": 128,
+  "window_size": 20,
+  "n_features": 3,
+  "forecast_horizon": 5,
+  "num_layers": 2
+}

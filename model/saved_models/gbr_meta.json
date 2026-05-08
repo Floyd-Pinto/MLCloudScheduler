@@ -1,0 +1,5 @@
+{
+  "n_features": 3,
+  "window_size": 20,
+  "forecast_horizon": 5
+}

@@ -1,8 +1,25 @@
-// src/pages/FindingsPage.jsx — Combined findings: model accuracy + scheduler comparison
-import { useState } from 'react';
+// src/pages/FindingsPage.jsx — Phase 2: per-resource overload breakdown + PNG export
+import { useState, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
+import {
+  Chart as ChartJS, CategoryScale, LinearScale,
+  BarElement, Legend, Tooltip,
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
 import { mlAPI, schedulerAPI } from '../services/api';
 import ForecastChart from '../charts/ForecastChart';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Legend, Tooltip);
+
+/* ── PNG export helper ─────────────────────────────────────────────────────── */
+const exportChart = (chartRef, filename) => {
+  if (!chartRef?.current) return;
+  const url = chartRef.current.toBase64Image('image/png', 1.0);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename || 'chart.png';
+  a.click();
+};
 
 export default function FindingsPage() {
   const [tab, setTab] = useState('scheduler');
@@ -20,6 +37,10 @@ export default function FindingsPage() {
   const [mSeed, setMSeed]       = useState(42);
   const [mRunning, setMRunning] = useState(false);
   const [mResult, setMResult]   = useState(null);
+
+  // Chart refs for PNG export
+  const overloadChartRef = useRef(null);
+  const forecastChartRef = useRef(null);
 
   const runSchedulerComparison = async () => {
     setRunning(true);
@@ -44,6 +65,61 @@ export default function FindingsPage() {
   const r = result?.reactive;
   const p = result?.predictive;
 
+  /* ── Per-resource overload data for grouped bar chart ───────────────────── */
+  const overloadBarData = (r && p) ? {
+    labels: ['CPU', 'Memory', 'Network', 'Any Resource'],
+    datasets: [
+      {
+        label: 'Reactive (Baseline)',
+        data: [
+          r.overload_cpu_count    ?? 0,
+          r.overload_memory_count ?? 0,
+          r.overload_network_count?? 0,
+          r.overload_events       ?? 0,
+        ],
+        backgroundColor: 'rgba(229, 229, 229, 0.7)',
+        borderColor: 'rgba(229, 229, 229, 1)',
+        borderWidth: 1,
+      },
+      {
+        label: 'Predictive (Proposed)',
+        data: [
+          p.overload_cpu_count    ?? 0,
+          p.overload_memory_count ?? 0,
+          p.overload_network_count?? 0,
+          p.overload_events       ?? 0,
+        ],
+        backgroundColor: 'rgba(120, 120, 120, 0.7)',
+        borderColor: 'rgba(120, 120, 120, 1)',
+        borderWidth: 1,
+      },
+    ],
+  } : null;
+
+  const overloadBarOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: '#9a9a9a', font: { size: 11, family: 'Inter' } } },
+      tooltip: {
+        backgroundColor: '#111', borderColor: '#2a2a2a', borderWidth: 1,
+        titleColor: '#e5e5e5', bodyColor: '#9a9a9a',
+      },
+    },
+    scales: {
+      x: { grid: { color: '#1a1a1a' }, ticks: { color: '#666', font: { size: 11 } } },
+      y: {
+        grid: { color: '#1a1a1a' },
+        ticks: { color: '#666', font: { size: 11, family: 'JetBrains Mono' } },
+        beginAtZero: true,
+      },
+    },
+  };
+
+  /* ── Reduction % for each resource ─────────────────────────────────────── */
+  const reduction = (rVal, pVal) =>
+    rVal > 0 ? ((rVal - pVal) / rVal * 100).toFixed(0) : '—';
+
   const metricRow = (label, rVal, pVal, unit = '', better = 'lower') => {
     const improved = better === 'lower' ? pVal < rVal : pVal > rVal;
     return (
@@ -65,7 +141,7 @@ export default function FindingsPage() {
       <div className="page-header">
         <div className="page-title">Findings</div>
         <div className="page-subtitle">
-          Experimental results — reactive vs predictive scheduling and model accuracy comparison.
+          Experimental results — reactive vs predictive scheduling (multi-resource) and model accuracy comparison.
         </div>
       </div>
 
@@ -110,6 +186,7 @@ export default function FindingsPage() {
           {/* Results */}
           {r && p && (
             <>
+              {/* Summary metrics table */}
               <div className="card">
                 <div className="section-title">
                   Results — {pattern.charAt(0).toUpperCase() + pattern.slice(1)} Pattern ({steps} steps)
@@ -125,9 +202,11 @@ export default function FindingsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {metricRow('Overload Events', r.overload_events, p.overload_events, '', 'lower')}
+                      {metricRow('Overload Events (Any)', r.overload_events, p.overload_events, '', 'lower')}
                       {metricRow('Overload Rate', r.overload_rate, p.overload_rate, '%', 'lower')}
                       {metricRow('Avg CPU Utilisation', r.avg_cpu, p.avg_cpu, '%', 'lower')}
+                      {metricRow('Avg Memory Utilisation', r.avg_memory, p.avg_memory, '%', 'lower')}
+                      {metricRow('Avg Network Utilisation', r.avg_network, p.avg_network, '%', 'lower')}
                       {metricRow('Total Cost', r.total_cost, p.total_cost, '', 'lower')}
                       {metricRow('Scale-Up Actions', r.scale_up_count, p.scale_up_count, '', 'lower')}
                       {metricRow('Scale-Down Actions', r.scale_down_count, p.scale_down_count, '')}
@@ -136,9 +215,48 @@ export default function FindingsPage() {
                 </div>
               </div>
 
+              {/* Per-resource overload grouped bar chart */}
+              <div className="card">
+                <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>Per-Resource Overload Breakdown</span>
+                  <button className="btn btn-outline btn-sm"
+                    onClick={() => exportChart(overloadChartRef, 'overload-comparison.png')}>
+                    ↓ Export PNG
+                  </button>
+                </div>
+                {overloadBarData && (
+                  <div style={{ height: 280 }}>
+                    <Bar ref={overloadChartRef} data={overloadBarData} options={overloadBarOpts} />
+                  </div>
+                )}
+                {/* Reduction labels */}
+                <div style={{ display: 'flex', gap: 16, marginTop: 16, flexWrap: 'wrap' }}>
+                  {[
+                    ['CPU', r.overload_cpu_count, p.overload_cpu_count],
+                    ['Memory', r.overload_memory_count, p.overload_memory_count],
+                    ['Network', r.overload_network_count, p.overload_network_count],
+                    ['Any', r.overload_events, p.overload_events],
+                  ].map(([label, rv, pv]) => (
+                    <div key={label} style={{ flex: 1, textAlign: 'center', padding: '10px 14px',
+                                              background: 'var(--bg-input)', borderRadius: 'var(--radius-md)',
+                                              border: '1px solid var(--border)' }}>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', textTransform: 'uppercase',
+                                    letterSpacing: '0.07em', marginBottom: 4 }}>{label}</div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--green)' }}>
+                        {reduction(rv, pv)}%
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {rv ?? 0} → {pv ?? 0}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Summary cards */}
               <div className="grid-2">
                 <div className="research-card">
-                  <h3>Overload Reduction</h3>
+                  <h3>Overall Overload Reduction</h3>
                   <div className="stat" style={{ color: 'var(--green)' }}>
                     {r.overload_events > 0
                       ? ((r.overload_events - p.overload_events) / r.overload_events * 100).toFixed(0)
@@ -149,7 +267,7 @@ export default function FindingsPage() {
                   </div>
                 </div>
                 <div className="research-card">
-                  <h3>CPU Stability</h3>
+                  <h3>Resource Stability</h3>
                   <div className="stat">{p.avg_cpu?.toFixed(1)}%</div>
                   <div className="label">
                     Predictive avg CPU (vs {r.avg_cpu?.toFixed(1)}% reactive)
@@ -205,7 +323,7 @@ export default function FindingsPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {['lstm', 'arima', 'combined'].map(mt => {
+                      {['gbr', 'lstm', 'arima', 'combined'].map(mt => {
                         const m = mResult.metrics?.[mt];
                         const isBest = mt === mResult.best_model;
                         return (
@@ -232,8 +350,14 @@ export default function FindingsPage() {
 
               {mResult.chart && (
                 <div className="card">
-                  <div className="section-title">Forecast vs Actual — {mPattern}</div>
-                  <ForecastChart data={mResult.chart} />
+                  <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Forecast vs Actual — {mPattern}</span>
+                    <button className="btn btn-outline btn-sm"
+                      onClick={() => exportChart(forecastChartRef, 'forecast-comparison.png')}>
+                      ↓ Export PNG
+                    </button>
+                  </div>
+                  <ForecastChart ref={forecastChartRef} data={mResult.chart} />
                 </div>
               )}
             </>

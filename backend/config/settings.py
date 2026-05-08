@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     "ml_model",
     "metrics",
     "evaluation",
+    "anomaly",
 ]
 
 MIDDLEWARE = [

@@ -1,0 +1,27 @@
+# ── Dockerfile.backend — Django API server ───────────────────────────────────
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install build tools for compiled packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY backend/requirements.txt requirements.txt
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copy project source
+COPY model/ /app/model/
+COPY backend/ /app/backend/
+
+WORKDIR /app/backend
+
+# Matplotlib non-interactive backend
+ENV MPLBACKEND=Agg
+ENV PYTHONPATH=/app
+
+# Run migrations then start Django
+CMD ["sh", "-c", "python manage.py migrate --run-syncdb && python manage.py runserver 0.0.0.0:8000"]

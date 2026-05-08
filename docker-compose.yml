@@ -1,19 +1,52 @@
-version: "3.9"
+
 
 services:
-  scheduler:
+  # ── 1. Trainer — runs model/train_all.py once, produces saved_models/ ──────
+  trainer:
     build:
       context: .
-      dockerfile: Dockerfile
-      target: runtime
-    image: ml-cloud-scheduler:latest
-    container_name: ml-cloud-scheduler
+      dockerfile: Dockerfile.backend
+    container_name: ml-scheduler-trainer
     volumes:
-      # Mount local directories so outputs are accessible on the host
-      - ./data:/app/data
-      - ./models:/app/models
-      - ./outputs:/app/outputs
+      - model_artifacts:/app/model/saved_models
     environment:
       - MPLBACKEND=Agg
-    # Re-run with a specific workload pattern:
-    #   docker compose run --rm scheduler python main.py
+      - PYTHONPATH=/app
+    working_dir: /app
+    command: ["python", "model/train_all.py"]
+
+  # ── 2. Backend — Django REST API ────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: ml-scheduler-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - model_artifacts:/app/model/saved_models
+      - db_data:/app/backend
+    environment:
+      - MPLBACKEND=Agg
+      - PYTHONPATH=/app
+      - DJANGO_DEBUG=True
+    depends_on:
+      trainer:
+        condition: service_completed_successfully
+
+  # ── 3. Frontend — React/Vite ────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_URL: http://localhost:8000/api
+    container_name: ml-scheduler-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+volumes:
+  model_artifacts:
+  db_data:

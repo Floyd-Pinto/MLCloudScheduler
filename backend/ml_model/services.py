@@ -1,4 +1,4 @@
-"""backend/ml_model/services.py — handles all 4 model types."""
+"""backend/ml_model/services.py — Updated for Phase 2 multi-resource models."""
 
 import sys, os, json
 from datetime import datetime, timezone
@@ -8,9 +8,16 @@ if _PROJECT_ROOT not in sys.path:
     sys.path.insert(0, _PROJECT_ROOT)
 
 import logging
+import numpy as np
 from .models import ModelTrainingRun, ModelComparisonResult
 
 logger = logging.getLogger(__name__)
+
+
+def _build_multivariate_data(steps: int = 600, seed: int = 42) -> np.ndarray:
+    """Generate multivariate training data for per-model training via API."""
+    from model.workload_generator import generate_multivariate
+    return generate_multivariate("combined", steps=steps, seed=seed)
 
 
 # ── Training ──────────────────────────────────────────────────────────────────
@@ -23,9 +30,15 @@ def trigger_training(model_type: str = "gbr") -> ModelTrainingRun:
             record.mae       = float(metrics["mae"])    if metrics.get("mae")   is not None else None
             record.r2        = float(metrics["r2"])     if metrics.get("r2")    is not None else None
             record.status    = "completed"
-            # store extra info (e.g. w_lstm, w_arima for combined)
-            extra = {k: float(v) for k, v in metrics.items()
-                     if k not in ("rmse", "mae", "r2", "training_time") and isinstance(v, (int, float))}
+            # Store extra info (per-resource metrics, weights, etc.)
+            extra = {}
+            for k, v in metrics.items():
+                if k not in ("rmse", "mae", "r2", "training_time"):
+                    if isinstance(v, (int, float)):
+                        extra[k] = float(v)
+                    elif isinstance(v, dict):
+                        extra[k] = {dk: float(dv) for dk, dv in v.items()
+                                    if isinstance(dv, (int, float))}
             if extra:
                 record.extra_info = extra
         else:
@@ -36,7 +49,6 @@ def trigger_training(model_type: str = "gbr") -> ModelTrainingRun:
         record.status    = "failed"
         record.error_msg = str(exc)[:500]
     finally:
-        # Invalidate inference cache so new model is loaded on next predict
         try:
             from model.inference import invalidate_cache
             invalidate_cache(model_type)
@@ -62,32 +74,34 @@ def _run_training(model_type: str) -> dict | None:
         return train()
 
     if model_type == "lstm":
-        import numpy as np
-        from model.lstm_model import LSTMForecaster
-        from model.train_all import build_full_series
-        series = build_full_series()
-        m = LSTMForecaster()
-        metrics = m.fit(series, verbose=False)
-        m.save()
-        return metrics
+        from model.train_lstm import train
+        return train()
 
     if model_type == "arima":
-        import numpy as np
-        from model.arima_model import ARIMAForecaster
-        from model.train_all import build_full_series
-        series = build_full_series()[:300]
-        m = ARIMAForecaster()
-        metrics = m.fit(series, verbose=False)
-        m.save()
-        return metrics
+        from model.train_arima import train
+        return train()
 
     if model_type == "combined":
-        import numpy as np
         from model.combined_model import CombinedForecaster
-        from model.train_all import build_full_series
-        series = build_full_series()[:600]
+        data = _build_multivariate_data()
         m = CombinedForecaster()
-        metrics = m.fit(series, verbose=False)
+        # Get per-resource metrics from latest training runs
+        lstm_run  = ModelTrainingRun.objects.filter(model_type="lstm", status="completed").first()
+        arima_run = ModelTrainingRun.objects.filter(model_type="arima", status="completed").first()
+
+        lstm_metrics = None
+        arima_metrics = None
+        if lstm_run and lstm_run.r2 is not None:
+            lstm_metrics = {"rmse": lstm_run.rmse, "mae": lstm_run.mae, "r2": lstm_run.r2}
+            # Include per-resource metrics from extra_info
+            if lstm_run.extra_info:
+                lstm_metrics.update(lstm_run.extra_info)
+        if arima_run and arima_run.r2 is not None:
+            arima_metrics = {"rmse": arima_run.rmse, "mae": arima_run.mae, "r2": arima_run.r2}
+            if arima_run.extra_info:
+                arima_metrics.update(arima_run.extra_info)
+
+        metrics = m.fit(data, verbose=False, lstm_metrics=lstm_metrics, arima_metrics=arima_metrics)
         m.save()
         return metrics
 
@@ -100,8 +114,8 @@ def run_inference(history: list[float], model_type: str = "gbr") -> dict:
     if not model_is_ready(model_type):
         return {"error": f"Model '{model_type}' not ready. Please train it first."}
     try:
-        value = predict(history, model_type=model_type)
-        return {"prediction": round(value, 4), "model_type": model_type}
+        result = predict(model_type=model_type, window=np.array(history))
+        return {"prediction": result, "model_type": model_type}
     except Exception as exc:
         return {"error": str(exc)}
 
@@ -110,7 +124,7 @@ def run_inference_all(history: list[float]) -> dict:
     """Run all available models. Returns dict with predictions + readiness."""
     from model.inference import predict_all, all_model_statuses
     statuses = all_model_statuses()
-    preds = predict_all(history)
+    preds = predict_all(np.array(history))
     return {"statuses": statuses, "predictions": preds}
 
 
@@ -137,20 +151,13 @@ def get_model_status() -> dict:
 def compare_all_models(pattern: str = "combined", steps: int = 300, seed: int = 42) -> dict:
     """
     Evaluate all 4 models: authoritative R²/RMSE/MAE come from the most recent
-    training run records in the DB (the same evaluation used at training time).
-    Chart data is generated by a fast batch forward pass on the requested pattern.
+    training run records in the DB. Chart data is generated from multi-resource
+    batch forward pass on the requested workload pattern.
     """
-    from model.workload_generator import generate_gradual, generate_spike, generate_periodic, generate_combined
+    from model.workload_generator import generate_multivariate
     from model.inference import predict, model_is_ready
-    import numpy as np
-    from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 
-    generators = {
-        "gradual": generate_gradual, "spike": generate_spike,
-        "periodic": generate_periodic, "combined": generate_combined,
-    }
-    gen    = generators.get(pattern, generate_combined)
-    series = gen(steps=max(steps, 200), seed=seed)
+    workload_mv = generate_multivariate(pattern=pattern, steps=max(steps, 200), seed=seed)
 
     # ── Pull metrics from DB training records (authoritative) ─────────────────
     metrics = {}
@@ -163,27 +170,35 @@ def compare_all_models(pattern: str = "combined", steps: int = 300, seed: int = 
                 "r2":    round(latest.r2,   4),
                 "ready": True,
             }
+            # Include per-resource metrics if available
+            if latest.extra_info:
+                for k, v in latest.extra_info.items():
+                    if isinstance(v, (int, float)):
+                        metrics[mt][k] = round(v, 4)
         else:
             metrics[mt] = {"rmse": None, "mae": None, "r2": None, "ready": False}
 
-    # ── Generate chart data: batch sliding-window forward pass ────────────────
-    WINDOW  = 15
+    # ── Generate chart data: CPU forecast vs actual ───────────────────────────
+    WINDOW  = 20
     HORIZON = 5
-    # Use the middle 60% of the series to avoid edge effects
-    start   = int(len(series) * 0.2)
-    end     = int(len(series) * 0.8)
+    cpu_series = workload_mv[:, 0]
+    start   = int(len(cpu_series) * 0.2)
+    end     = int(len(cpu_series) * 0.8)
     test_ts = list(range(start + WINDOW, end - HORIZON))
 
-    actuals    = [float(series[t + HORIZON]) for t in test_ts]
+    actuals    = [float(cpu_series[t + HORIZON]) for t in test_ts]
     timestamps = test_ts
     forecasts  = {mt: [] for mt in ("gbr", "lstm", "arima", "combined")}
 
     for t in test_ts:
-        hist = list(series[: t + 1])
+        window = workload_mv[:t + 1]  # multi-resource window
         for mt in ("gbr", "lstm", "arima", "combined"):
             if model_is_ready(mt):
                 try:
-                    forecasts[mt].append(float(predict(hist, model_type=mt)))
+                    result = predict(model_type=mt, window=window)
+                    # Use CPU forecast (first step ahead with HORIZON offset)
+                    cpu_forecast = result["cpu"]
+                    forecasts[mt].append(float(cpu_forecast[-1]))  # last step of horizon
                 except Exception:
                     forecasts[mt].append(None)
             else:
@@ -205,7 +220,7 @@ def compare_all_models(pattern: str = "combined", steps: int = 300, seed: int = 
 
     # Save to DB
     comp = ModelComparisonResult.objects.create(
-        series_length=len(series), pattern=pattern, seed=seed, best_model=best,
+        series_length=len(workload_mv), pattern=pattern, seed=seed, best_model=best,
         gbr_rmse=metrics["gbr"].get("rmse"),      gbr_mae=metrics["gbr"].get("mae"),      gbr_r2=metrics["gbr"].get("r2"),
         lstm_rmse=metrics["lstm"].get("rmse"),     lstm_mae=metrics["lstm"].get("mae"),     lstm_r2=metrics["lstm"].get("r2"),
         arima_rmse=metrics["arima"].get("rmse"),   arima_mae=metrics["arima"].get("mae"),   arima_r2=metrics["arima"].get("r2"),
@@ -214,5 +229,3 @@ def compare_all_models(pattern: str = "combined", steps: int = 300, seed: int = 
     )
 
     return {"id": comp.id, "metrics": metrics, "chart": chart, "best_model": best}
-
-

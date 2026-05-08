@@ -1,4 +1,4 @@
-// src/components/Sidebar.jsx — Academic research navigation
+// src/components/Sidebar.jsx — Academic research navigation (Phase 2)
 import { NavLink } from 'react-router-dom';
 
 const NAV = [
@@ -11,8 +11,10 @@ const NAV = [
   ]},
   { section: 'Results', items: [
     { to: '/findings',   icon: '▸',  label: 'Findings'          },
+    { to: '/comparison', icon: '▸',  label: 'Models Comparison' },
     { to: '/metrics',    icon: '▸',  label: 'Metrics'           },
     { to: '/logs',       icon: '▸',  label: 'Run Logs'          },
+    { to: '/anomaly',    icon: '▸',  label: 'Anomaly Log'       },
   ]},
 ];
 
@@ -51,7 +53,10 @@ export default function Sidebar() {
             <span style={{ color:'var(--green)', fontWeight:600, fontSize:11 }}>Backend Online</span>
           </div>
           <div style={{ fontFamily:'JetBrains Mono, monospace', fontSize:10 }}>
-            LSTM · ARIMA · Combined
+            LSTM · ARIMA · Combined · GBR
+          </div>
+          <div style={{ fontFamily:'JetBrains Mono, monospace', fontSize:10, color:'var(--text-muted)', marginTop:2 }}>
+            CPU · Memory · Network I/O
           </div>
         </div>
       </div>

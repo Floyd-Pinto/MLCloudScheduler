@@ -1,0 +1,20 @@
+# ── Dockerfile.frontend — React Vite frontend ────────────────────────────────
+FROM node:20-slim AS build
+
+WORKDIR /app
+
+COPY frontend/package*.json ./
+RUN npm install
+
+COPY frontend/ .
+ARG VITE_API_URL=http://localhost:8000/api
+ENV VITE_API_URL=${VITE_API_URL}
+RUN npm run build
+
+# ── Production: serve with lightweight server ─────────────────────────────────
+FROM node:20-slim
+RUN npm install -g serve
+WORKDIR /app
+COPY --from=build /app/dist ./dist
+EXPOSE 3000
+CMD ["serve", "-s", "dist", "-l", "3000"]

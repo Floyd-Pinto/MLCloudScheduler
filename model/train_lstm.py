@@ -1,129 +1,80 @@
 """
 model/train_lstm.py
 -------------------
-LSTM (deep learning) training script for workload forecasting.
+Training script for the multi-resource LSTM forecaster.
+
+Generates three-dimensional workload data (CPU, memory, network I/O),
+trains the LSTM with a window of 20 time steps and a 5-step forecast
+horizon, and reports per-resource evaluation metrics.
 
 Usage:
-    pip install tensorflow
     python model/train_lstm.py
 
 Outputs:
-    model/saved_models/lstm_model.h5
+    model/saved_models/lstm_model.pt
     model/saved_models/lstm_scaler.pkl
+    model/saved_models/lstm_meta.json
 """
 
 import os
 import sys
 import numpy as np
-import joblib
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from model.workload_generator import generate_gradual, generate_spike, generate_periodic, generate_combined
+from model.workload_generator import generate_multivariate
+from model.lstm_model import LSTMForecaster
 
-WINDOW_SIZE = 20
-HORIZON     = 5
-MODEL_DIR   = os.path.join(os.path.dirname(__file__), "saved_models")
-
-
-def build_sequences(series: np.ndarray, window: int, horizon: int):
-    X, y = [], []
-    for i in range(len(series) - window - horizon + 1):
-        X.append(series[i: i + window])
-        y.append(series[i + window + horizon - 1])
-    return np.array(X), np.array(y)
+MODEL_DIR = os.path.join(os.path.dirname(__file__), "saved_models")
 
 
-def train():
-    try:
-        import tensorflow as tf
-        from tensorflow.keras.models import Sequential
-        from tensorflow.keras.layers import LSTM, Dense, Dropout
-        from tensorflow.keras.callbacks import EarlyStopping
-        from sklearn.preprocessing import MinMaxScaler
-        from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
-    except ImportError:
-        print("TensorFlow not installed. Run: pip install tensorflow")
-        return None
+def build_training_data(seed: int = 42) -> np.ndarray:
+    """
+    Construct a diverse multi-resource training corpus.
 
-    print("Generating training data for LSTM...")
-    patterns = [
-        generate_gradual(steps=600, seed=10),
-        generate_spike(steps=600, seed=11),
-        generate_periodic(steps=600, seed=12),
-        generate_combined(steps=700, seed=13),
-        generate_gradual(steps=500, seed=14),
-        generate_spike(steps=500, seed=15),
+    Concatenates multiple workload patterns with varying parameters
+    to expose the LSTM to a wide range of temporal dynamics.
+    """
+    segments = [
+        generate_multivariate("gradual",  steps=500, seed=seed),
+        generate_multivariate("spike",    steps=500, seed=seed + 1),
+        generate_multivariate("periodic", steps=500, seed=seed + 2),
+        generate_multivariate("combined", steps=600, seed=seed + 3),
+        # Additional spike variations for robustness
+        generate_multivariate("spike",    steps=400, seed=seed + 10),
+        generate_multivariate("spike",    steps=400, seed=seed + 11),
+        generate_multivariate("combined", steps=500, seed=seed + 7),
+        generate_multivariate("gradual",  steps=400, seed=seed + 4),
+        generate_multivariate("periodic", steps=400, seed=seed + 6),
     ]
+    return np.vstack(segments)
 
-    X_all, y_all = [], []
-    for series in patterns:
-        # Scale each series independently then collect
-        X, y = build_sequences(series, WINDOW_SIZE, HORIZON)
-        X_all.append(X)
-        y_all.append(y)
 
-    X_all = np.vstack(X_all)
-    y_all = np.concatenate(y_all)
+def train(data: np.ndarray | None = None, verbose: bool = True) -> dict:
+    """Train LSTM and return per-resource metrics."""
+    if data is None:
+        if verbose:
+            print("Generating multi-resource training data for LSTM...")
+        data = build_training_data()
 
-    # Scale
-    scaler = MinMaxScaler()
-    X_flat = X_all.reshape(-1, WINDOW_SIZE)
-    X_scaled = scaler.fit_transform(X_flat).reshape(-1, WINDOW_SIZE, 1)
-    y_min, y_max = y_all.min(), y_all.max()
-    y_scaled = (y_all - y_min) / (y_max - y_min + 1e-8)
+    if verbose:
+        print(f"  Training data: {data.shape[0]} steps × {data.shape[1]} features")
 
-    split = int(0.8 * len(X_scaled))
-    X_train, X_test = X_scaled[:split], X_scaled[split:]
-    y_train, y_test = y_scaled[:split], y_scaled[split:]
+    model = LSTMForecaster()
+    metrics = model.fit(data, verbose=verbose)
+    model.save()
 
-    print(f"Dataset: {X_all.shape[0]} sequences, window={WINDOW_SIZE}, horizon={HORIZON}")
+    if verbose:
+        print(f"\n  LSTM Results:")
+        for key in ["cpu_r2", "memory_r2", "network_r2", "r2"]:
+            if key in metrics:
+                label = key.replace("_", " ").title()
+                print(f"    {label}: {metrics[key]:.4f}")
 
-    model = Sequential([
-        LSTM(64, return_sequences=True, input_shape=(WINDOW_SIZE, 1)),
-        Dropout(0.2),
-        LSTM(32),
-        Dropout(0.2),
-        Dense(16, activation="relu"),
-        Dense(1),
-    ])
-    model.compile(optimizer="adam", loss="mse")
-
-    early_stop = EarlyStopping(monitor="val_loss", patience=8, restore_best_weights=True)
-    history = model.fit(
-        X_train, y_train,
-        validation_split=0.1,
-        epochs=80,
-        batch_size=32,
-        callbacks=[early_stop],
-        verbose=1,
-    )
-
-    # Evaluate (inverse transform)
-    y_pred_scaled = model.predict(X_test).flatten()
-    y_pred = y_pred_scaled * (y_max - y_min) + y_min
-    y_true = y_test * (y_max - y_min) + y_min
-
-    rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
-    mae  = float(mean_absolute_error(y_true, y_pred))
-    r2   = float(r2_score(y_true, y_pred))
-
-    print(f"\nLSTM Test Results:")
-    print(f"  RMSE : {rmse:.4f}")
-    print(f"  MAE  : {mae:.4f}")
-    print(f"  R²   : {r2:.4f}")
-
-    os.makedirs(MODEL_DIR, exist_ok=True)
-    model.save(os.path.join(MODEL_DIR, "lstm_model.h5"))
-    # Save scaler + y range for inverse transform
-    meta = {"scaler": scaler, "y_min": y_min, "y_max": y_max}
-    joblib.dump(meta, os.path.join(MODEL_DIR, "lstm_meta.pkl"))
-    print(f"\nLSTM model saved to {MODEL_DIR}/")
-
-    return {"rmse": rmse, "mae": mae, "r2": r2}
+    return metrics
 
 
 if __name__ == "__main__":
     result = train()
     if result:
-        print(f"\nLSTM training complete. R² = {result['r2']:.4f}")
+        print(f"\nLSTM training complete. Overall R² = {result['r2']:.4f}")

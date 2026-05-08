@@ -1,11 +1,22 @@
 """
-model/inference.py  (updated — supports GBR, LSTM, ARIMA, Combined)
+model/inference.py
+-------------------
+Unified multi-resource prediction interface for all four models:
+LSTM, ARIMA, Combined ensemble, and GBR.
+
+All models accept a window of shape (20, 3) and return per-resource
+5-step forecasts via a single ``predict()`` entry point.
 """
 
 import os
+import json
 import numpy as np
 
 MODEL_DIR = os.path.join(os.path.dirname(__file__), "saved_models")
+
+WINDOW_SIZE      = 20
+FORECAST_HORIZON = 5
+N_FEATURES       = 3
 
 
 # ── per-model singletons ──────────────────────────────────────────────────────
@@ -23,6 +34,10 @@ def _get_model(model_type: str):
         if not (os.path.exists(mp) and os.path.exists(sp)):
             raise FileNotFoundError("GBR model not found. Run model/train_gbr.py")
         obj = {"model": joblib.load(mp), "scaler": joblib.load(sp)}
+        meta_path = os.path.join(MODEL_DIR, "gbr_meta.json")
+        if os.path.exists(meta_path):
+            with open(meta_path) as f:
+                obj["meta"] = json.load(f)
         _models["gbr"] = obj
         return obj
 
@@ -50,31 +65,79 @@ def _get_model(model_type: str):
         _models["combined"] = m
         return m
 
-    raise ValueError(f"Unknown model_type '{model_type}'. Supported: gbr, lstm, arima, combined")
+    raise ValueError(f"Unknown model_type '{model_type}'. "
+                     f"Supported: gbr, lstm, arima, combined")
 
 
-def predict(history: list[float], model_type: str = "gbr", window_size: int = 10) -> float:
-    """Unified prediction entry point."""
+def predict(model_type: str, window: np.ndarray) -> dict:
+    """
+    Unified prediction interface for all models.
+
+    Parameters
+    ----------
+    model_type : str
+        One of "lstm", "arima", "combined", "gbr".
+    window : np.ndarray
+        Shape (20, 3) — last 20 steps of [cpu, memory, network_io].
+        Also accepts shape (n,) for backward compatibility (single signal).
+
+    Returns
+    -------
+    dict
+        {
+          "cpu":     [f1, f2, f3, f4, f5],
+          "memory":  [f1, f2, f3, f4, f5],
+          "network": [f1, f2, f3, f4, f5]
+        }
+    """
+    # Normalize input to (window_size, n_features)
+    if isinstance(window, list):
+        window = np.array(window, dtype=np.float32)
+    if window.ndim == 1:
+        w = window[-WINDOW_SIZE:]
+        window = np.column_stack([w, w * 0.7, w * 0.5])
+
+    window = window[-WINDOW_SIZE:]  # ensure correct window size
+
     if model_type == "gbr":
         obj = _get_model("gbr")
-        window = np.array(history[-window_size:]).reshape(1, -1)
-        window_s = obj["scaler"].transform(window)
-        return float(obj["model"].predict(window_s)[0])
+        scaler = obj["scaler"]
+        model = obj["model"]
+        window_scaled = scaler.transform(window)
+        X = window_scaled.flatten().reshape(1, -1)
+        pred_flat = model.predict(X)[0]  # shape: (FORECAST_HORIZON * N_FEATURES,)
+        pred = pred_flat.reshape(FORECAST_HORIZON, N_FEATURES)
+        pred_inv = scaler.inverse_transform(pred)
+        pred_inv = np.clip(pred_inv, 0, 100)
+    elif model_type == "lstm":
+        m = _get_model("lstm")
+        pred_inv = m.predict(window)
+        pred_inv = np.clip(pred_inv, 0, 100)
+    elif model_type == "arima":
+        m = _get_model("arima")
+        pred_inv = m.predict(window, steps=FORECAST_HORIZON)
+        pred_inv = np.clip(pred_inv, 0, 100)
+    elif model_type == "combined":
+        m = _get_model("combined")
+        pred_inv = m.predict(window)
+        pred_inv = np.clip(pred_inv, 0, 100)
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
 
-    if model_type in ("lstm", "arima", "combined"):
-        m = _get_model(model_type)
-        return m.predict(history)
+    return {
+        "cpu":     [round(float(v), 4) for v in pred_inv[:, 0]],
+        "memory":  [round(float(v), 4) for v in pred_inv[:, 1]],
+        "network": [round(float(v), 4) for v in pred_inv[:, 2]],
+    }
 
-    raise ValueError(f"Unknown model_type: {model_type}")
 
-
-def predict_all(history: list[float]) -> dict:
-    """Run all available models and return dict of predictions."""
+def predict_all(window: np.ndarray) -> dict:
+    """Run all available models and return dict of per-model predictions."""
     results = {}
     for mt in ("gbr", "lstm", "arima", "combined"):
         try:
-            results[mt] = round(predict(history, model_type=mt), 4)
-        except Exception as e:
+            results[mt] = predict(model_type=mt, window=window)
+        except Exception:
             results[mt] = None
     return results
 
