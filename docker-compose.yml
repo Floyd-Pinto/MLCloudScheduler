@@ -6,6 +6,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      network: host
     container_name: ml-scheduler-trainer
     volumes:
       - model_artifacts:/app/model/saved_models
@@ -20,6 +21,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.backend
+      network: host
     container_name: ml-scheduler-backend
     ports:
       - "8000:8000"
@@ -39,6 +41,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.frontend
+      network: host
       args:
         VITE_API_URL: http://localhost:8000/api
     container_name: ml-scheduler-frontend
