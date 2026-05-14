@@ -7,14 +7,16 @@ const NAV = [
   ]},
   { section: 'Experiment', items: [
     { to: '/simulation', icon: '▸',  label: 'Workload Simulation'},
+    { to: '/real-world', icon: '▸',  label: 'Real-World Datasets'},
     { to: '/training',   icon: '▸',  label: 'Model Training'    },
   ]},
   { section: 'Results', items: [
-    { to: '/findings',   icon: '▸',  label: 'Findings'          },
-    { to: '/comparison', icon: '▸',  label: 'Models Comparison' },
-    { to: '/metrics',    icon: '▸',  label: 'Metrics'           },
-    { to: '/logs',       icon: '▸',  label: 'Run Logs'          },
-    { to: '/anomaly',    icon: '▸',  label: 'Anomaly Log'       },
+    { to: '/findings',                icon: '▸',  label: 'Findings'                },
+    { to: '/comparison',              icon: '▸',  label: 'Models Comparison'       },
+    { to: '/statistical-validation',  icon: '▸',  label: 'Statistical Validation'  },
+    { to: '/metrics',                 icon: '▸',  label: 'Metrics'                 },
+    { to: '/logs',                    icon: '▸',  label: 'Run Logs'                },
+    { to: '/anomaly',                 icon: '▸',  label: 'Anomaly Log'             },
   ]},
 ];
 

@@ -59,3 +59,26 @@ class ModelComparisonResult(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+
+
+class StatisticalValidationRun(models.Model):
+    """Stores results from N-run statistical validation experiments."""
+    created_at       = models.DateTimeField(auto_now_add=True)
+    n_runs           = models.IntegerField(default=20)
+    pattern          = models.CharField(max_length=32, default="combined")
+    steps            = models.IntegerField(default=300)
+    elapsed_seconds  = models.FloatField(null=True, blank=True)
+    lstm_win_rate    = models.FloatField(null=True, blank=True)
+    lstm_mean_r2     = models.FloatField(null=True, blank=True)
+    lstm_std_r2      = models.FloatField(null=True, blank=True)
+    gbr_mean_r2      = models.FloatField(null=True, blank=True)
+    arima_mean_r2    = models.FloatField(null=True, blank=True)
+    combined_mean_r2 = models.FloatField(null=True, blank=True)
+    full_results     = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Validation {self.n_runs} runs — LSTM win {self.lstm_win_rate:.0%} ({self.created_at:%Y-%m-%d %H:%M})"
+

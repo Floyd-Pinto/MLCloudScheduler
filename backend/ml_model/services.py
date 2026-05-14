@@ -9,6 +9,7 @@ if _PROJECT_ROOT not in sys.path:
 
 import logging
 import numpy as np
+from sklearn.metrics import r2_score, mean_squared_error, mean_absolute_error
 from .models import ModelTrainingRun, ModelComparisonResult
 
 logger = logging.getLogger(__name__)
@@ -18,6 +19,17 @@ def _build_multivariate_data(steps: int = 600, seed: int = 42) -> np.ndarray:
     """Generate multivariate training data for per-model training via API."""
     from model.workload_generator import generate_multivariate
     return generate_multivariate("combined", steps=steps, seed=seed)
+
+
+def _generate_workload(pattern: str, steps: int, seed: int) -> np.ndarray:
+    """Generate workload data, supporting both synthetic and real-data patterns."""
+    if pattern in ("google_trace", "alibaba_trace"):
+        from model.workload_generator import generate_from_real_data
+        source = "google" if pattern == "google_trace" else "alibaba"
+        return generate_from_real_data(source=source, steps=steps, start_offset=seed)
+    else:
+        from model.workload_generator import generate_multivariate
+        return generate_multivariate(pattern=pattern, steps=max(steps, 200), seed=seed)
 
 
 # ── Training ──────────────────────────────────────────────────────────────────
@@ -147,38 +159,108 @@ def get_model_status() -> dict:
     return result
 
 
-# ── Model Comparison ──────────────────────────────────────────────────────────
-def compare_all_models(pattern: str = "combined", steps: int = 300, seed: int = 42) -> dict:
+# ── Model Comparison (LIVE metrics on same workload) ─────────────────────────
+def _compute_live_metrics(workload_mv: np.ndarray, model_type: str,
+                          window_size: int = 20, horizon: int = 5) -> dict:
     """
-    Evaluate all 4 models: authoritative R²/RMSE/MAE come from the most recent
-    training run records in the DB. Chart data is generated from multi-resource
-    batch forward pass on the requested workload pattern.
+    Compute LIVE R², RMSE, MAE for a model on the given workload using
+    a proper sliding window evaluation. This ensures all models are
+    evaluated on the EXACT same data — no stale DB values.
+
+    Returns per-resource and overall metrics.
     """
-    from model.workload_generator import generate_multivariate
     from model.inference import predict, model_is_ready
 
-    workload_mv = generate_multivariate(pattern=pattern, steps=max(steps, 200), seed=seed)
+    if not model_is_ready(model_type):
+        return {"r2": None, "rmse": None, "mae": None, "ready": False,
+                "cpu_r2": None, "mem_r2": None, "net_r2": None}
 
-    # ── Pull metrics from DB training records (authoritative) ─────────────────
+    n = len(workload_mv)
+    start = int(n * 0.2)
+    end = int(n * 0.8)
+
+    actuals_cpu = []
+    actuals_mem = []
+    actuals_net = []
+    preds_cpu = []
+    preds_mem = []
+    preds_net = []
+
+    # Sliding window evaluation: predict HORIZON steps ahead
+    for t in range(start + window_size, end - horizon):
+        window = workload_mv[:t + 1]
+        actual_idx = t + horizon
+
+        if actual_idx >= n:
+            break
+
+        try:
+            result = predict(model_type=model_type, window=window)
+            # result has 'cpu', 'memory', 'network' — each a list of HORIZON values
+            preds_cpu.append(float(result["cpu"][-1]))
+            preds_mem.append(float(result["memory"][-1]))
+            preds_net.append(float(result["network"][-1]))
+
+            actuals_cpu.append(float(workload_mv[actual_idx, 0]))
+            actuals_mem.append(float(workload_mv[actual_idx, 1]))
+            actuals_net.append(float(workload_mv[actual_idx, 2]))
+        except Exception:
+            continue
+
+    if len(actuals_cpu) < 10:
+        return {"r2": None, "rmse": None, "mae": None, "ready": True,
+                "cpu_r2": None, "mem_r2": None, "net_r2": None}
+
+    a_cpu, p_cpu = np.array(actuals_cpu), np.array(preds_cpu)
+    a_mem, p_mem = np.array(actuals_mem), np.array(preds_mem)
+    a_net, p_net = np.array(actuals_net), np.array(preds_net)
+
+    # Per-resource R²
+    cpu_r2 = float(r2_score(a_cpu, p_cpu))
+    mem_r2 = float(r2_score(a_mem, p_mem))
+    net_r2 = float(r2_score(a_net, p_net))
+
+    cpu_rmse = float(np.sqrt(mean_squared_error(a_cpu, p_cpu)))
+    mem_rmse = float(np.sqrt(mean_squared_error(a_mem, p_mem)))
+    net_rmse = float(np.sqrt(mean_squared_error(a_net, p_net)))
+
+    # Overall: combine all resources
+    a_all = np.concatenate([a_cpu, a_mem, a_net])
+    p_all = np.concatenate([p_cpu, p_mem, p_net])
+
+    overall_r2 = float(r2_score(a_all, p_all))
+    overall_rmse = float(np.sqrt(mean_squared_error(a_all, p_all)))
+    overall_mae = float(mean_absolute_error(a_all, p_all))
+
+    return {
+        "r2": round(overall_r2, 4),
+        "rmse": round(overall_rmse, 4),
+        "mae": round(overall_mae, 4),
+        "cpu_r2": round(cpu_r2, 4),
+        "cpu_rmse": round(cpu_rmse, 4),
+        "mem_r2": round(mem_r2, 4),
+        "mem_rmse": round(mem_rmse, 4),
+        "net_r2": round(net_r2, 4),
+        "net_rmse": round(net_rmse, 4),
+        "ready": True,
+    }
+
+
+def compare_all_models(pattern: str = "combined", steps: int = 300, seed: int = 42) -> dict:
+    """
+    Evaluate all 4 models on the SAME workload using LIVE inference.
+    All metrics are computed on the fly — no stale DB values.
+    """
+    from model.inference import predict, model_is_ready
+
+    workload_mv = _generate_workload(pattern, steps, seed)
+
+    # ── Compute LIVE metrics for all 4 models on the SAME workload ───────
     metrics = {}
     for mt in ("gbr", "lstm", "arima", "combined"):
-        latest = ModelTrainingRun.objects.filter(model_type=mt, status="completed").first()
-        if latest and latest.r2 is not None:
-            metrics[mt] = {
-                "rmse":  round(latest.rmse, 4) if latest.rmse else None,
-                "mae":   round(latest.mae,  4) if latest.mae  else None,
-                "r2":    round(latest.r2,   4),
-                "ready": True,
-            }
-            # Include per-resource metrics if available
-            if latest.extra_info:
-                for k, v in latest.extra_info.items():
-                    if isinstance(v, (int, float)):
-                        metrics[mt][k] = round(v, 4)
-        else:
-            metrics[mt] = {"rmse": None, "mae": None, "r2": None, "ready": False}
+        metrics[mt] = _compute_live_metrics(workload_mv, mt)
 
-    # ── Generate chart data: CPU forecast vs actual ───────────────────────────
+    # ── Generate chart data: CPU forecast vs actual ───────────────────────
     WINDOW  = 20
     HORIZON = 5
     cpu_series = workload_mv[:, 0]
@@ -196,9 +278,8 @@ def compare_all_models(pattern: str = "combined", steps: int = 300, seed: int = 
             if model_is_ready(mt):
                 try:
                     result = predict(model_type=mt, window=window)
-                    # Use CPU forecast (first step ahead with HORIZON offset)
                     cpu_forecast = result["cpu"]
-                    forecasts[mt].append(float(cpu_forecast[-1]))  # last step of horizon
+                    forecasts[mt].append(float(cpu_forecast[-1]))
                 except Exception:
                     forecasts[mt].append(None)
             else:
@@ -216,7 +297,7 @@ def compare_all_models(pattern: str = "combined", steps: int = 300, seed: int = 
 
     # Best model by R²
     ready = [mt for mt in metrics if metrics[mt].get("ready")]
-    best  = max(ready, key=lambda m: metrics[m].get("r2", -999)) if ready else ""
+    best  = max(ready, key=lambda m: metrics[m].get("r2") or -999) if ready else ""
 
     # Save to DB
     comp = ModelComparisonResult.objects.create(

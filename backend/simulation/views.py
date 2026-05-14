@@ -59,3 +59,23 @@ class WorkloadRunDetailView(APIView):
             return Response(status=status.HTTP_204_NO_CONTENT)
         except WorkloadRun.DoesNotExist:
             return Response({"error": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+
+class TracePreviewView(APIView):
+    """GET /api/simulation/trace-preview/ — Fetch full trace data without saving to DB."""
+
+    def get(self, request):
+        pattern = request.query_params.get("pattern", "google_trace")
+        steps = int(request.query_params.get("steps", 10000))
+        from model.workload_generator import generate_multivariate_records
+        try:
+            records = generate_multivariate_records(pattern=pattern, steps=steps, seed=0)
+            
+            # Subsample to max 500 points to prevent frontend chart lag
+            if len(records) > 500:
+                stride = len(records) // 500
+                records = records[::stride]
+            
+            return Response(records)
+        except Exception as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

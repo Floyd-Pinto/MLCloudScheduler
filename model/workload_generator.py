@@ -90,6 +90,55 @@ def generate(pattern: str = "combined", steps: int = 200, seed: int = 42) -> np.
     return fn(steps=steps, seed=seed)
 
 
+# ── Real data loaders ────────────────────────────────────────────────────────
+
+def generate_from_real_data(source: str = "google", steps: int = 600,
+                            start_offset: int = 0) -> np.ndarray:
+    """
+    Load real-world cluster trace data and return a (steps, 3) slice.
+
+    Parameters
+    ----------
+    source : str
+        One of 'google' or 'alibaba'.
+    steps : int
+        Number of time steps to return.
+    start_offset : int
+        Starting index within the loaded data.
+
+    Returns
+    -------
+    np.ndarray
+        Shape (steps, 3) with columns [cpu_usage, memory_usage, network_io].
+    """
+    import os
+    data_dir = os.path.join(os.path.dirname(__file__), "data")
+
+    if source == "google":
+        npy_path = os.path.join(data_dir, "google_trace_sample.npy")
+        if not os.path.exists(npy_path):
+            from model.data.google_trace_loader import download_and_process
+            download_and_process(npy_path)
+        data = np.load(npy_path)
+    elif source == "alibaba":
+        npy_path = os.path.join(data_dir, "alibaba_trace_sample.npy")
+        if not os.path.exists(npy_path):
+            from model.data.alibaba_loader import download_and_process
+            download_and_process(npy_path)
+        data = np.load(npy_path)
+    else:
+        raise ValueError(f"Unknown source '{source}'. Choose 'google' or 'alibaba'.")
+
+    # Ensure we have enough data
+    end = start_offset + steps
+    if end > len(data):
+        # Wrap around or truncate
+        end = len(data)
+        start_offset = max(0, end - steps)
+
+    return data[start_offset:start_offset + steps].copy()
+
+
 # ── Multi-resource signal derivation ─────────────────────────────────────────
 
 def derive_memory_usage(cpu_usage: np.ndarray, rng: np.random.Generator) -> np.ndarray:
@@ -140,7 +189,7 @@ def generate_multivariate(pattern: str = "combined", steps: int = 200,
     Parameters
     ----------
     pattern : str
-        One of 'gradual', 'spike', 'periodic', 'combined'.
+        One of 'gradual', 'spike', 'periodic', 'combined', 'google_trace', 'alibaba_trace'.
     steps : int
         Number of time steps to generate.
     seed : int
@@ -151,6 +200,11 @@ def generate_multivariate(pattern: str = "combined", steps: int = 200,
     np.ndarray
         Shape (steps, 3) with columns [cpu_usage, memory_usage, network_io].
     """
+    if pattern == "google_trace":
+        return generate_from_real_data("google", steps=steps, start_offset=seed)
+    if pattern == "alibaba_trace":
+        return generate_from_real_data("alibaba", steps=steps, start_offset=seed)
+
     cpu_usage = generate(pattern=pattern, steps=steps, seed=seed)
     rng = np.random.default_rng(seed + 1000)  # separate seed for derived signals
     memory_usage = derive_memory_usage(cpu_usage, rng)
@@ -166,6 +220,20 @@ def generate_multivariate_records(pattern: str = "combined", steps: int = 200,
     Each dictionary contains:
       cpu_usage, memory_usage, network_io, workload, timestamp
     """
+    if pattern in ["google_trace", "alibaba_trace"]:
+        data = generate_multivariate(pattern=pattern, steps=steps, seed=seed)
+        records = []
+        actual_steps = len(data)
+        for t in range(actual_steps):
+            records.append({
+                "timestamp":    t,
+                "cpu_usage":    round(float(data[t, 0]), 4),
+                "memory_usage": round(float(data[t, 1]), 4),
+                "network_io":   round(float(data[t, 2]), 4),
+                "workload":     round(float(data[t, 0]), 4), # alias workload to cpu_usage
+            })
+        return records
+
     cpu_usage = generate(pattern=pattern, steps=steps, seed=seed)
     rng = np.random.default_rng(seed + 1000)
     memory_usage = derive_memory_usage(cpu_usage, rng)

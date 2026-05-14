@@ -38,6 +38,14 @@ def train_all(verbose: bool = True) -> dict:
         the model's per-resource metrics dict.
     """
     os.makedirs(MODEL_DIR, exist_ok=True)
+    
+    if os.environ.get("SKIP_TRAINING", "0").lower() in ("1", "true"):
+        if verbose:
+            print("============================================================")
+            print("  SKIP_TRAINING is set to true. Bypassing model training.")
+            print("============================================================")
+        return {}
+
     results = {}
     t0 = time.time()
 

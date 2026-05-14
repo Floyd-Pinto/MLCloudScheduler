@@ -9,7 +9,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                   React Frontend (Vite 8)                         │
+│                   React Frontend (Vite 8)                        │
 │  8 Pages: Dashboard, Simulation, Training, Findings,             │
 │           ModelComparison, Metrics, Logs, AnomalyLog             │
 │  Theme: Monochrome academic (Inter + JetBrains Mono)             │
@@ -24,33 +24,33 @@
 │  Apps:                                                           │
 │    simulation/  → WorkloadRun, WorkloadDataPoint                 │
 │    scheduler/   → SchedulerRun, SchedulerAction                  │
-│    ml_model/    → ModelTrainingRun, ModelComparisonResult         │
+│    ml_model/    → ModelTrainingRun, ModelComparisonResult        │
 │    metrics/     → Aggregate views on SchedulerRun                │
 │    evaluation/  → EvaluationResult                               │
 │    anomaly/     → AnomalyLogEntry                                │
 │                                                                  │
-│  Each app: models.py → serializers.py → services.py → views.py  │
+│  Each app: models.py → serializers.py → services.py → views.py   │
 └──────────┬──────────────────────────┬────────────────────────────┘
            │                          │
            ▼                          ▼
-┌────────────────────┐    ┌─────────────────────────────────────┐
-│  SQLite Database   │    │     model/ Python Package           │
-│  (db.sqlite3)      │    │                                     │
-│                    │    │  workload_generator.py               │
-│  7 Tables:         │    │  lstm_model.py      (PyTorch)       │
-│  · WorkloadRun     │    │  arima_model.py     (statsmodels)   │
-│  · WorkloadDataPoint│   │  combined_model.py  (ensemble)      │
-│  · SchedulerRun    │    │  train_gbr.py       (sklearn)       │
-│  · SchedulerAction │    │  anomaly_detector.py (IsolationForest)│
-│  · ModelTrainingRun│    │  inference.py        (unified API)  │
-│  · ModelComparison │    │  reactive_scheduler.py               │
-│  · EvaluationResult│    │  predictive_scheduler.py             │
-│  · AnomalyLogEntry │    │  metrics_collector.py                │
-│                    │    │  evaluate.py                         │
-│                    │    │  train_all.py                        │
-│                    │    │                                     │
-│                    │    │  saved_models/ (12 artifacts)        │
-└────────────────────┘    └─────────────────────────────────────┘
+┌────────────────────┐    ┌────────────────────────────────────────┐
+│  SQLite Database   │    │     model/ Python Package              │
+│  (db.sqlite3)      │    │                                        │
+│                    │    │  workload_generator.py                 │
+│  7 Tables:         │    │  lstm_model.py      (PyTorch)          │
+│  · WorkloadRun     │    │  arima_model.py     (statsmodels)      │
+│  · WorkloadDataPoint│   │  combined_model.py  (ensemble)         │
+│  · SchedulerRun    │    │  train_gbr.py       (sklearn)          │  
+│  · SchedulerAction │    │  anomaly_detector.py (IsolationForest) │
+│  · ModelTrainingRun│    │  inference.py        (unified API)     │
+│  · ModelComparison │    │  reactive_scheduler.py                 │
+│  · EvaluationResult│    │  predictive_scheduler.py               │
+│  · AnomalyLogEntry │    │  metrics_collector.py                  │
+│                    │    │  evaluate.py                           │
+│                    │    │  train_all.py                          │
+│                    │    │                                        │
+│                    │    │  saved_models/ (12 artifacts)          │
+└────────────────────┘    └────────────────────────────────────────┘
 ```
 
 ## 3.2 Docker Architecture

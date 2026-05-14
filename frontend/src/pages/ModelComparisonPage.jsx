@@ -121,25 +121,24 @@ export default function ModelComparisonPage() {
   const statuses = status?.statuses || {};
   const metrics  = result?.metrics;
 
-  /* ── Build per-resource metrics table from status API extra_info ────── */
+  /* ── Build per-resource metrics table from live API result ────── */
   const perResourceData = {};
   for (const mt of ['gbr', 'lstm', 'arima', 'combined']) {
-    const info = status?.[mt];
+    const info = metrics?.[mt];
     if (info) {
-      const extra = info.extra_info || {};
       perResourceData[mt] = {
-        cpu_r2:     extra.cpu_r2     ?? extra.r2_cpu     ?? null,
-        cpu_rmse:   extra.cpu_rmse   ?? extra.rmse_cpu   ?? null,
-        mem_r2:     extra.memory_r2  ?? extra.r2_memory  ?? null,
-        mem_rmse:   extra.memory_rmse?? extra.rmse_memory ?? null,
-        net_r2:     extra.network_r2 ?? extra.r2_network ?? null,
-        net_rmse:   extra.network_rmse ?? extra.rmse_network ?? null,
+        cpu_r2:     info.cpu_r2,
+        cpu_rmse:   info.cpu_rmse,
+        mem_r2:     info.mem_r2,
+        mem_rmse:   info.mem_rmse,
+        net_r2:     info.net_r2,
+        net_rmse:   info.net_rmse,
         overall_r2: info.r2,
         overall_rmse: info.rmse,
       };
     }
   }
-  const hasPerResource = Object.values(perResourceData).some(d =>
+  const hasPerResource = result && Object.values(perResourceData).some(d =>
     d.cpu_r2 != null || d.mem_r2 != null || d.net_r2 != null);
 
   return (

@@ -100,39 +100,68 @@ export default function TrainingPage() {
               </div>
 
               {info?.r2 != null && (
-                <div style={{ display: 'flex', gap: 24, fontFamily: 'JetBrains Mono, monospace', fontSize: 13 }}>
-                  <div>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>R² Score</span>
-                    <div style={{ fontWeight: 700, fontSize: 22, marginTop: 2 }}>{info.r2.toFixed(4)}</div>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>RMSE</span>
-                    <div style={{ fontWeight: 600, fontSize: 18, marginTop: 4, color: 'var(--text-secondary)' }}>{info.rmse?.toFixed(4)}</div>
-                  </div>
-                  <div>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>MAE</span>
-                    <div style={{ fontWeight: 600, fontSize: 18, marginTop: 4, color: 'var(--text-secondary)' }}>{info.mae?.toFixed(4)}</div>
-                  </div>
-                  {info.extra_info?.w_lstm != null && (
-                    <>
-                      <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 24 }}>
-                        <span style={{ color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>W_LSTM</span>
-                        <div style={{ fontWeight: 600, fontSize: 18, marginTop: 4, color: 'var(--text-secondary)' }}>{info.extra_info.w_lstm.toFixed(3)}</div>
+                <>
+                  <div style={{ display: 'flex', gap: 24, fontFamily: 'JetBrains Mono, monospace', fontSize: 13, flexWrap: 'wrap' }}>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>R² Score</span>
+                      <div style={{ fontWeight: 700, fontSize: 22, marginTop: 2 }}>{info.r2.toFixed(4)}</div>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>RMSE</span>
+                      <div style={{ fontWeight: 600, fontSize: 18, marginTop: 4, color: 'var(--text-secondary)' }}>{info.rmse?.toFixed(4)}</div>
+                    </div>
+                    <div>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>MAE</span>
+                      <div style={{ fontWeight: 600, fontSize: 18, marginTop: 4, color: 'var(--text-secondary)' }}>{info.mae?.toFixed(4)}</div>
+                    </div>
+                    {info.extra_info?.w_lstm != null && (
+                      <>
+                        <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 24 }}>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>W_LSTM</span>
+                          <div style={{ fontWeight: 600, fontSize: 18, marginTop: 4, color: 'var(--text-secondary)' }}>
+                            {typeof info.extra_info.w_lstm === 'number' ? info.extra_info.w_lstm.toFixed(3) : 'Per-Resource'}
+                          </div>
+                        </div>
+                        <div>
+                          <span style={{ color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>W_ARIMA</span>
+                          <div style={{ fontWeight: 600, fontSize: 18, marginTop: 4, color: 'var(--text-secondary)' }}>
+                            {typeof info.extra_info.w_arima === 'number' ? info.extra_info.w_arima.toFixed(3) : 'Per-Resource'}
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {info.finished_at && (
+                      <div style={{ marginLeft: 'auto', alignSelf: 'flex-end' }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                          Last trained: {new Date(info.finished_at).toLocaleString()}
+                        </span>
                       </div>
-                      <div>
-                        <span style={{ color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em' }}>W_ARIMA</span>
-                        <div style={{ fontWeight: 600, fontSize: 18, marginTop: 4, color: 'var(--text-secondary)' }}>{info.extra_info.w_arima.toFixed(3)}</div>
-                      </div>
-                    </>
-                  )}
-                  {info.finished_at && (
-                    <div style={{ marginLeft: 'auto', alignSelf: 'flex-end' }}>
-                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        Last trained: {new Date(info.finished_at).toLocaleString()}
-                      </span>
+                    )}
+                  </div>
+                  {/* Per-resource R² breakdown */}
+                  {info.extra_info && (info.extra_info.cpu_r2 != null || info.extra_info.r2_cpu != null) && (
+                    <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                      {[
+                        ['CPU R²', info.extra_info.cpu_r2 ?? info.extra_info.r2_cpu],
+                        ['MEM R²', info.extra_info.memory_r2 ?? info.extra_info.r2_memory],
+                        ['NET R²', info.extra_info.network_r2 ?? info.extra_info.r2_network],
+                      ].map(([label, val]) => (
+                        <div key={label} style={{
+                          padding: '6px 14px', background: 'var(--bg-input)', borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--border)', textAlign: 'center',
+                        }}>
+                          <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</div>
+                          <div style={{
+                            fontSize: 15, fontWeight: 700, marginTop: 2,
+                            color: (val ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)',
+                          }}>
+                            {val != null ? val.toFixed(4) : '—'}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
-                </div>
+                </>
               )}
             </div>
           );

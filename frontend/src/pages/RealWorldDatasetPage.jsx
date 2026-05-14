@@ -1,28 +1,23 @@
-// src/pages/SimulationPage.jsx — Phase 2: Live Mode toggle + multi-resource support
+// src/pages/RealWorldDatasetPage.jsx
 import { useState, useEffect, useRef, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { simulationAPI } from '../services/api';
 import WorkloadChart from '../charts/WorkloadChart';
 
-const PATTERNS = ['gradual', 'spike', 'periodic', 'combined'];
+const PATTERNS = ['google_trace', 'alibaba_trace'];
 
 const PATTERN_DESCRIPTIONS = {
-  gradual:       'Steadily increasing load — simulates user growth over time.',
-  spike:         'Sudden burst — flash sale, viral event, or DDoS scenario.',
-  periodic:      'Sinusoidal daily cycle — regular business-hours traffic.',
-  combined:      'Mix of all patterns — most realistic production simulation.',
+  google_trace:  'Real-world cluster data from Google Cluster Trace 2019. Download happens on first use (~30s).',
+  alibaba_trace: 'Real-world cluster data from Alibaba Cluster Trace v2018. Download happens on first use (~30s).',
 };
 
 const PATTERN_LABELS = {
-  gradual:       'Gradual',
-  spike:         'Spike',
-  periodic:      'Periodic',
-  combined:      'Combined',
+  google_trace:  '☁ Google Cluster Trace',
+  alibaba_trace: '☁ Alibaba Cluster Trace',
 };
 
-
-export default function SimulationPage() {
-  const [form,    setForm]    = useState({ pattern: 'combined', steps: 200, seed: 42, label: '' });
+export default function RealWorldDatasetPage() {
+  const [form,    setForm]    = useState({ pattern: 'google_trace', steps: 300, seed: 0, label: '' });
   const [runs,    setRuns]    = useState([]);
   const [loading, setLoading] = useState(false);
   const [selected,setSelected]= useState(null);
@@ -129,16 +124,16 @@ export default function SimulationPage() {
   return (
     <div>
       <div className="page-header">
-        <div className="page-title">Workload Simulation</div>
+        <div className="page-title">Real-World Datasets</div>
         <div className="page-subtitle">
-          Generate synthetic multi-resource cloud workload patterns (CPU, Memory, Network I/O) for scheduler testing.
+          Extract workloads from massive Google and Alibaba cluster traces for scheduler testing.
         </div>
       </div>
 
       <div className="grid-2" style={{ marginBottom: 24 }}>
         {/* Control Panel */}
         <div className="card">
-          <div className="section-title">Generate Workload</div>
+          <div className="section-title">Extract Trace Data</div>
 
           <div className="form-group">
             <label className="form-label">Pattern Type</label>

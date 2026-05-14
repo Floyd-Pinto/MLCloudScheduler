@@ -23,6 +23,16 @@ data/*.csv
 models/*.pkl
 models/*.joblib
 
+# Saved ML model binaries (regenerate via `make train`)
+model/saved_models/*.pkl
+model/saved_models/*.pt
+
+# Downloaded real-data files (regenerate via `make download-data`)
+model/data/*.npy
+
+# Django database
+backend/db.sqlite3
+
 # Plot outputs (generated at runtime) — keep .gitkeep
 outputs/*
 !outputs/.gitkeep
@@ -34,3 +44,8 @@ outputs/*
 # OS
 .DS_Store
 Thumbs.db
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/

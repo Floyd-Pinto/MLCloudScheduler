@@ -4,14 +4,20 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 
 import numpy as np
-from model.workload_generator import generate, generate_multivariate
+from model.workload_generator import generate, generate_multivariate, generate_from_real_data
 
 from .models import WorkloadRun, WorkloadDataPoint
 
 
 def generate_and_save(pattern: str, steps: int, seed: int, label: str = "") -> WorkloadRun:
     """Generate multi-resource workload and save to DB."""
-    workload_mv = generate_multivariate(pattern=pattern, steps=steps, seed=seed)
+    # Route real-data patterns to the appropriate loader
+    if pattern == "google_trace":
+        workload_mv = generate_from_real_data(source="google", steps=steps, start_offset=seed)
+    elif pattern == "alibaba_trace":
+        workload_mv = generate_from_real_data(source="alibaba", steps=steps, start_offset=seed)
+    else:
+        workload_mv = generate_multivariate(pattern=pattern, steps=steps, seed=seed)
 
     run = WorkloadRun.objects.create(pattern=pattern, steps=steps, seed=seed, label=label)
 
@@ -27,3 +33,4 @@ def generate_and_save(pattern: str, steps: int, seed: int, label: str = "") -> W
     ]
     WorkloadDataPoint.objects.bulk_create(datapoints)
     return run
+

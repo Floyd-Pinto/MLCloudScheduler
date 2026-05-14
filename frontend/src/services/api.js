@@ -15,6 +15,7 @@ export const simulationAPI = {
   listRuns: () => api.get('/simulation/runs/'),
   getRun:   (id) => api.get(`/simulation/runs/${id}/`),
   deleteRun:(id) => api.delete(`/simulation/runs/${id}/`),
+  previewTrace: (pattern) => api.get('/simulation/trace-preview/', { params: { pattern } }),
 };
 
 // ── Scheduler ───────────────────────────────────────────────
@@ -36,6 +37,8 @@ export const mlAPI = {
   predictAll:     (data) => api.post('/ml/predict-all/', data),
   compareModels:  (data) => api.post('/ml/compare-models/', data),
   comparisonList: ()     => api.get('/ml/compare-models/'),
+  runStatisticalValidation: (data) => api.post('/ml/statistical-validation/', data),
+  getStatisticalValidation: ()     => api.get('/ml/statistical-validation/'),
 };
 
 // ── Metrics ─────────────────────────────────────────────────

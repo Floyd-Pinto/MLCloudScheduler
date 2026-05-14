@@ -1,5 +1,5 @@
-// src/pages/FindingsPage.jsx — Phase 2: per-resource overload breakdown + PNG export
-import { useState, useRef, useCallback } from 'react';
+// src/pages/FindingsPage.jsx — Phase 2: per-resource overload breakdown + PNG export + history persistence
+import { useState, useRef, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import {
   Chart as ChartJS, CategoryScale, LinearScale,
@@ -21,6 +21,30 @@ const exportChart = (chartRef, filename) => {
   a.click();
 };
 
+/* ── localStorage helpers ──────────────────────────────────────────────────── */
+const SCHED_HISTORY_KEY = 'scheduler_comparison_history';
+const MODEL_HISTORY_KEY = 'model_accuracy_history';
+const MAX_HISTORY = 10;
+
+function loadHistory(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function saveHistory(key, entry) {
+  const hist = loadHistory(key);
+  hist.unshift(entry);
+  if (hist.length > MAX_HISTORY) hist.length = MAX_HISTORY;
+  localStorage.setItem(key, JSON.stringify(hist));
+  return hist;
+}
+
+function clearHistory(key) {
+  localStorage.removeItem(key);
+}
+
 export default function FindingsPage() {
   const [tab, setTab] = useState('scheduler');
 
@@ -31,6 +55,10 @@ export default function FindingsPage() {
   const [running, setRunning] = useState(false);
   const [result, setResult]   = useState(null);
 
+  // Scheduler history
+  const [schedHistory, setSchedHistory] = useState([]);
+  const [schedHistoryOpen, setSchedHistoryOpen] = useState(false);
+
   // Model comparison state
   const [mPattern, setMPattern] = useState('combined');
   const [mSteps, setMSteps]     = useState(300);
@@ -38,9 +66,19 @@ export default function FindingsPage() {
   const [mRunning, setMRunning] = useState(false);
   const [mResult, setMResult]   = useState(null);
 
+  // Model history
+  const [modelHistory, setModelHistory] = useState([]);
+  const [modelHistoryOpen, setModelHistoryOpen] = useState(false);
+
   // Chart refs for PNG export
   const overloadChartRef = useRef(null);
   const forecastChartRef = useRef(null);
+
+  // Load history on mount
+  useEffect(() => {
+    setSchedHistory(loadHistory(SCHED_HISTORY_KEY));
+    setModelHistory(loadHistory(MODEL_HISTORY_KEY));
+  }, []);
 
   const runSchedulerComparison = async () => {
     setRunning(true);
@@ -48,6 +86,22 @@ export default function FindingsPage() {
       const res = await schedulerAPI.compare({ pattern, steps, seed });
       setResult(res.data);
       toast.success('Comparison complete');
+
+      // Persist to history
+      const r = res.data.reactive;
+      const p = res.data.predictive;
+      const entry = {
+        timestamp: new Date().toISOString(),
+        pattern, steps, seed,
+        reactive_overloads: r?.overload_events ?? 0,
+        predictive_overloads: p?.overload_events ?? 0,
+        reduction_pct: r?.overload_events > 0
+          ? ((r.overload_events - p.overload_events) / r.overload_events * 100).toFixed(1)
+          : '0',
+        full_data: res.data,
+      };
+      const updated = saveHistory(SCHED_HISTORY_KEY, entry);
+      setSchedHistory(updated);
     } catch (e) { toast.error('Failed'); }
     setRunning(false);
   };
@@ -58,8 +112,37 @@ export default function FindingsPage() {
       const res = await mlAPI.compareModels({ pattern: mPattern, steps: mSteps, seed: mSeed });
       setMResult(res.data);
       toast.success('Model comparison complete');
+
+      // Persist to history
+      const metrics = res.data.metrics || {};
+      const entry = {
+        timestamp: new Date().toISOString(),
+        pattern: mPattern, steps: mSteps, seed: mSeed,
+        lstm_r2: metrics.lstm?.r2 ?? null,
+        gbr_r2: metrics.gbr?.r2 ?? null,
+        arima_r2: metrics.arima?.r2 ?? null,
+        combined_r2: metrics.combined?.r2 ?? null,
+        best_model: res.data.best_model || '',
+        full_data: res.data,
+      };
+      const updated = saveHistory(MODEL_HISTORY_KEY, entry);
+      setModelHistory(updated);
     } catch (e) { toast.error('Failed'); }
     setMRunning(false);
+  };
+
+  const loadSchedulerHistoryEntry = (entry) => {
+    if (entry.full_data) {
+      setResult(entry.full_data);
+      toast.success(`Loaded run from ${new Date(entry.timestamp).toLocaleString()}`);
+    }
+  };
+
+  const loadModelHistoryEntry = (entry) => {
+    if (entry.full_data) {
+      setMResult(entry.full_data);
+      toast.success(`Loaded run from ${new Date(entry.timestamp).toLocaleString()}`);
+    }
   };
 
   const r = result?.reactive;
@@ -167,6 +250,8 @@ export default function FindingsPage() {
                   <option value="spike">Sudden Spike</option>
                   <option value="periodic">Periodic / Diurnal</option>
                   <option value="combined">Combined</option>
+                  <option value="google_trace">☁ Google Cluster Trace</option>
+                  <option value="alibaba_trace">☁ Alibaba Cluster Trace</option>
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: 0, width: 120 }}>
@@ -276,6 +361,52 @@ export default function FindingsPage() {
               </div>
             </>
           )}
+
+          {/* Scheduler comparison history (B1) */}
+          {schedHistory.length > 0 && (
+            <div className="card" style={{ marginTop: 20 }}>
+              <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                onClick={() => setSchedHistoryOpen(!schedHistoryOpen)}>
+                <span>{schedHistoryOpen ? '▾' : '▸'} Previous Runs ({schedHistory.length})</span>
+                <button className="btn btn-outline btn-sm" onClick={(e) => {
+                  e.stopPropagation();
+                  clearHistory(SCHED_HISTORY_KEY);
+                  setSchedHistory([]);
+                  toast.success('History cleared');
+                }}>Clear History</button>
+              </div>
+              {schedHistoryOpen && (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th><th>Pattern</th><th>Steps</th><th>Seed</th>
+                        <th>Reactive</th><th>Predictive</th><th>Reduction</th><th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {schedHistory.map((h, i) => (
+                        <tr key={i}>
+                          <td style={{ fontSize: 12 }}>{new Date(h.timestamp).toLocaleString()}</td>
+                          <td><span className="badge badge-blue">{h.pattern}</span></td>
+                          <td>{h.steps}</td>
+                          <td>{h.seed}</td>
+                          <td className="metric-value">{h.reactive_overloads}</td>
+                          <td className="metric-value">{h.predictive_overloads}</td>
+                          <td style={{ color: 'var(--green)', fontWeight: 700 }}>{h.reduction_pct}%</td>
+                          <td>
+                            <button className="btn btn-outline btn-sm" onClick={() => loadSchedulerHistoryEntry(h)}>
+                              Load
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
@@ -291,6 +422,8 @@ export default function FindingsPage() {
                   <option value="spike">Sudden Spike</option>
                   <option value="periodic">Periodic / Diurnal</option>
                   <option value="combined">Combined</option>
+                  <option value="google_trace">☁ Google Cluster Trace</option>
+                  <option value="alibaba_trace">☁ Alibaba Cluster Trace</option>
                 </select>
               </div>
               <div className="form-group" style={{ marginBottom: 0, width: 120 }}>
@@ -319,6 +452,9 @@ export default function FindingsPage() {
                         <th>R² Score</th>
                         <th>RMSE</th>
                         <th>MAE</th>
+                        <th>CPU R²</th>
+                        <th>MEM R²</th>
+                        <th>NET R²</th>
                         <th>Status</th>
                       </tr>
                     </thead>
@@ -335,6 +471,15 @@ export default function FindingsPage() {
                             <td className="metric-value">{m?.r2?.toFixed(4) ?? '—'}</td>
                             <td className="metric-value">{m?.rmse?.toFixed(4) ?? '—'}</td>
                             <td className="metric-value">{m?.mae?.toFixed(4) ?? '—'}</td>
+                            <td className="metric-value" style={{ color: (m?.cpu_r2 ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)' }}>
+                              {m?.cpu_r2?.toFixed(4) ?? '—'}
+                            </td>
+                            <td className="metric-value" style={{ color: (m?.mem_r2 ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)' }}>
+                              {m?.mem_r2?.toFixed(4) ?? '—'}
+                            </td>
+                            <td className="metric-value" style={{ color: (m?.net_r2 ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)' }}>
+                              {m?.net_r2?.toFixed(4) ?? '—'}
+                            </td>
                             <td>
                               <span className={`badge ${m?.ready ? 'badge-green' : 'badge-red'}`}>
                                 {m?.ready ? 'Trained' : 'Untrained'}
@@ -361,6 +506,53 @@ export default function FindingsPage() {
                 </div>
               )}
             </>
+          )}
+
+          {/* Model accuracy history (B2) */}
+          {modelHistory.length > 0 && (
+            <div className="card" style={{ marginTop: 20 }}>
+              <div className="section-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+                onClick={() => setModelHistoryOpen(!modelHistoryOpen)}>
+                <span>{modelHistoryOpen ? '▾' : '▸'} Previous Evaluations ({modelHistory.length})</span>
+                <button className="btn btn-outline btn-sm" onClick={(e) => {
+                  e.stopPropagation();
+                  clearHistory(MODEL_HISTORY_KEY);
+                  setModelHistory([]);
+                  toast.success('History cleared');
+                }}>Clear History</button>
+              </div>
+              {modelHistoryOpen && (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Timestamp</th><th>Pattern</th>
+                        <th>LSTM R²</th><th>GBR R²</th><th>ARIMA R²</th><th>Combined R²</th>
+                        <th>Best</th><th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {modelHistory.map((h, i) => (
+                        <tr key={i}>
+                          <td style={{ fontSize: 12 }}>{new Date(h.timestamp).toLocaleString()}</td>
+                          <td><span className="badge badge-blue">{h.pattern}</span></td>
+                          <td className="metric-value" style={{ color: 'var(--purple)' }}>{h.lstm_r2?.toFixed(4) ?? '—'}</td>
+                          <td className="metric-value" style={{ color: 'var(--accent)' }}>{h.gbr_r2?.toFixed(4) ?? '—'}</td>
+                          <td className="metric-value" style={{ color: 'var(--yellow)' }}>{h.arima_r2?.toFixed(4) ?? '—'}</td>
+                          <td className="metric-value" style={{ color: 'var(--green)' }}>{h.combined_r2?.toFixed(4) ?? '—'}</td>
+                          <td><span className="badge badge-green">{h.best_model?.toUpperCase()}</span></td>
+                          <td>
+                            <button className="btn btn-outline btn-sm" onClick={() => loadModelHistoryEntry(h)}>
+                              Load
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           )}
         </>
       )}

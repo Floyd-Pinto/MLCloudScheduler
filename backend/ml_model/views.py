@@ -3,7 +3,7 @@ from rest_framework.views   import APIView
 from rest_framework.response import Response
 from rest_framework          import status
 
-from .models       import ModelTrainingRun, ModelComparisonResult
+from .models       import ModelTrainingRun, ModelComparisonResult, StatisticalValidationRun
 from .serializers  import (ModelTrainingRunSerializer, ModelComparisonResultSerializer,
                             TrainRequestSerializer, PredictRequestSerializer)
 from .services     import (trigger_training, trigger_train_all,
@@ -83,3 +83,57 @@ class ModelCompareView(APIView):
         seed    = int(request.data.get("seed",    42))
         result  = compare_all_models(pattern=pattern, steps=steps, seed=seed)
         return Response(result, status=status.HTTP_201_CREATED)
+
+
+class StatisticalValidationView(APIView):
+    """
+    POST /api/ml/statistical-validation/ — run N-run validation.
+    GET  /api/ml/statistical-validation/ — list past validation results.
+    """
+    def get(self, request):
+        qs = StatisticalValidationRun.objects.all()[:10]
+        data = []
+        for run in qs:
+            data.append({
+                "id": run.id,
+                "n_runs": run.n_runs,
+                "pattern": run.pattern,
+                "steps": run.steps,
+                "elapsed_seconds": run.elapsed_seconds,
+                "lstm_win_rate": run.lstm_win_rate,
+                "lstm_mean_r2": run.lstm_mean_r2,
+                "lstm_std_r2": run.lstm_std_r2,
+                "gbr_mean_r2": run.gbr_mean_r2,
+                "arima_mean_r2": run.arima_mean_r2,
+                "combined_mean_r2": run.combined_mean_r2,
+                "created_at": run.created_at.isoformat() if run.created_at else None,
+                "full_results": run.full_results,
+            })
+        return Response(data)
+
+    def post(self, request):
+        n_runs  = int(request.data.get("n_runs", 20))
+        pattern = request.data.get("pattern", "combined")
+        steps   = int(request.data.get("steps", 300))
+
+        from .statistical_validation import run_statistical_validation
+        results = run_statistical_validation(n_runs=n_runs, pattern=pattern, steps=steps)
+
+        # Save to DB
+        summary = results.get("summary", {})
+        record = StatisticalValidationRun.objects.create(
+            n_runs=n_runs,
+            pattern=pattern,
+            steps=steps,
+            elapsed_seconds=results.get("elapsed_seconds"),
+            lstm_win_rate=results.get("lstm_win_rate"),
+            lstm_mean_r2=summary.get("lstm", {}).get("mean_r2"),
+            lstm_std_r2=summary.get("lstm", {}).get("std_r2"),
+            gbr_mean_r2=summary.get("gbr", {}).get("mean_r2"),
+            arima_mean_r2=summary.get("arima", {}).get("mean_r2"),
+            combined_mean_r2=summary.get("combined", {}).get("mean_r2"),
+            full_results=results,
+        )
+
+        results["id"] = record.id
+        return Response(results, status=status.HTTP_201_CREATED)

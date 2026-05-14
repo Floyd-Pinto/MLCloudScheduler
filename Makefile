@@ -1,4 +1,4 @@
-.PHONY: help install train migrate backend frontend dev docker-up docker-down test-api clean
+.PHONY: help install train download-data migrate backend frontend dev docker-up docker-down test-api clean
 
 VENV = source .venv/bin/activate &&
 NODE = export NVM_DIR="$$HOME/.nvm" && . "$$NVM_DIR/nvm.sh" &&
@@ -8,16 +8,17 @@ help:
 	@echo "  ML-Based Adaptive Cloud Resource Scheduling (Phase 2)"
 	@echo "  ======================================================="
 	@echo ""
-	@echo "  make install     Install all Python + Node dependencies"
-	@echo "  make train       Train all 5 ML models (GBR, LSTM, ARIMA, Combined, AnomalyDetector)"
-	@echo "  make migrate     Run Django migrations"
-	@echo "  make backend     Start Django backend (port 8000)"
-	@echo "  make frontend    Start React frontend (port 5173)"
-	@echo "  make dev         Start BOTH backend and frontend"
-	@echo "  make docker-up   Build and run all 3 Docker services"
-	@echo "  make docker-down Stop Docker services"
-	@echo "  make test-api    Quick smoke-test all API endpoints"
-	@echo "  make clean       Remove pycache and build artifacts"
+	@echo "  make install        Install all Python + Node dependencies"
+	@echo "  make train          Train all 5 ML models (GBR, LSTM, ARIMA, Combined, AnomalyDetector)"
+	@echo "  make download-data  Download real-world cluster trace data (Google + Alibaba)"
+	@echo "  make migrate        Run Django migrations"
+	@echo "  make backend        Start Django backend (port 8000)"
+	@echo "  make frontend       Start React frontend (port 5173)"
+	@echo "  make dev            Start BOTH backend and frontend"
+	@echo "  make docker-up      Build and run all 3 Docker services"
+	@echo "  make docker-down    Stop Docker services"
+	@echo "  make test-api       Quick smoke-test all API endpoints"
+	@echo "  make clean          Remove pycache and build artifacts"
 	@echo ""
 
 install:
@@ -30,6 +31,10 @@ install:
 
 train:
 	$(VENV) MPLBACKEND=Agg python model/train_all.py
+
+download-data:
+	$(VENV) python model/data/google_trace_loader.py
+	$(VENV) python model/data/alibaba_loader.py
 
 migrate:
 	$(VENV) cd backend && python manage.py makemigrations && python manage.py migrate

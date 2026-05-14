@@ -12,8 +12,20 @@
 > across CPU, Memory, and Network I/O simultaneously?
 
 **Phase 1 Result**: 39–62% overload reduction on CPU-only scheduling.
-**Phase 2 Extension**: Multi-resource (CPU + Memory + Network I/O) predictive scheduling
-with anomaly detection.
+**Phase 2 Extension**: Multi-resource (CPU + Memory + Network I/O) predictive scheduling, real-world data integration, anomaly detection, and robust statistical validation.
+
+---
+
+## 4 Measurable Objectives
+
+This research project is evaluated against the following four core objectives:
+
+| # | Objective | Metric | Target |
+|---|-----------|--------|--------|
+| **O1** | Establish LSTM as the best single-resource forecasting model by training on real-world Google Cluster Trace data and achieving R² ≥ 0.90 on CPU prediction. | R² score on test set | ≥ 0.90 |
+| **O2** | Extend forecasting to 3 simultaneous resources (CPU + Memory + Network) and demonstrate LSTM outperforms ARIMA by ≥ 25% in overall R². | LSTM R² − ARIMA R² | ≥ 0.25 gap |
+| **O3** | Build a predictive scheduler that reduces cloud resource overload events by ≥ 35% versus a reactive threshold-based baseline across all workload patterns. | Overload reduction % | ≥ 35% |
+| **O4** | Provide robust statistical validation of model performance by evaluating across 20 independent experiments with diverse randomized patterns. | LSTM Win Rate | ≥ 80% |
 
 ---
 

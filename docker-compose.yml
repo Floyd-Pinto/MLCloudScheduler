@@ -13,6 +13,7 @@ services:
     environment:
       - MPLBACKEND=Agg
       - PYTHONPATH=/app
+      - SKIP_TRAINING=${SKIP_TRAINING:-0}
     working_dir: /app
     command: ["python", "model/train_all.py"]
 
@@ -27,7 +28,7 @@ services:
       - "8000:8000"
     volumes:
       - model_artifacts:/app/model/saved_models
-      - db_data:/app/backend
+      - ./backend:/app/backend
     environment:
       - MPLBACKEND=Agg
       - PYTHONPATH=/app
@@ -52,4 +53,3 @@ services:
 
 volumes:
   model_artifacts:
-  db_data:

@@ -99,6 +99,49 @@ export default function DashboardPage() {
         )}
       </div>
 
+      {/* Model Accuracy Summary (C2) */}
+      {mlStatus && (
+        <div className="card">
+          <div className="section-title">Model Accuracy Summary</div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Model</th><th>Overall R²</th><th>CPU R²</th><th>MEM R²</th><th>NET R²</th><th>RMSE</th>
+                </tr>
+              </thead>
+              <tbody>
+                {models.map(({ key, name }) => {
+                  const info = mlStatus?.[key];
+                  const extra = info?.extra_info || {};
+                  const cpu_r2 = extra.cpu_r2 ?? extra.r2_cpu ?? null;
+                  const mem_r2 = extra.memory_r2 ?? extra.r2_memory ?? null;
+                  const net_r2 = extra.network_r2 ?? extra.r2_network ?? null;
+                  return (
+                    <tr key={key}>
+                      <td style={{ fontWeight: 700, fontSize: 13 }}>{name}</td>
+                      <td style={{ fontWeight: 700, color: (info?.r2 ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)' }}>
+                        {fmtR2(info?.r2)}
+                      </td>
+                      <td style={{ color: (cpu_r2 ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)' }}>
+                        {cpu_r2 != null ? cpu_r2.toFixed(4) : '—'}
+                      </td>
+                      <td style={{ color: (mem_r2 ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)' }}>
+                        {mem_r2 != null ? mem_r2.toFixed(4) : '—'}
+                      </td>
+                      <td style={{ color: (net_r2 ?? 0) >= 0.9 ? 'var(--green)' : 'var(--text-secondary)' }}>
+                        {net_r2 != null ? net_r2.toFixed(4) : '—'}
+                      </td>
+                      <td>{fmtVal(info?.rmse)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Key Finding */}
       {r && p && (
         <div className="card">

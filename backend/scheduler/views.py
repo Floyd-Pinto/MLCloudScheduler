@@ -1,6 +1,7 @@
 """scheduler/views.py"""
 
 import logging
+# pyrefly: ignore [missing-import]
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -48,9 +49,10 @@ class RunComparisonView(APIView):
             return Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
         d = ser.validated_data
         try:
-            ids = run_comparison(d["pattern"], d["steps"], d["seed"])
-            r_run = SchedulerRun.objects.get(pk=ids["reactive_id"])
-            p_run = SchedulerRun.objects.get(pk=ids["predictive_id"])
+            from evaluation.services import run_full_evaluation
+            eval_res = run_full_evaluation(d["pattern"], d["steps"], d["seed"])
+            r_run = SchedulerRun.objects.get(pk=eval_res.reactive_run_id)
+            p_run = SchedulerRun.objects.get(pk=eval_res.predictive_run_id)
             return Response({
                 "reactive":   SchedulerRunDetailSerializer(r_run).data,
                 "predictive": SchedulerRunDetailSerializer(p_run).data,
